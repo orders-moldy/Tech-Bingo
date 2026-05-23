@@ -55,23 +55,23 @@ async function initDB() {
 }
 
 function getWeekendInfo() {
+  const tz = process.env.TZ || 'America/Chicago';
   const now = new Date();
-  const day = now.getDay(); // 0=Sun, 6=Sat
-  const sat = new Date(now);
 
-  let dayName;
-  if (day === 6) {
-    dayName = 'Saturday';
-  } else if (day === 0) {
-    dayName = 'Sunday';
-    sat.setDate(now.getDate() - 1); // go back to Saturday
-  } else {
-    dayName = 'Saturday'; // weekday — treat as upcoming Saturday for testing
-    sat.setDate(now.getDate() + (6 - day));
-  }
+  // Get the day of week and date string in the configured timezone
+  const dayName = now.toLocaleDateString('en-US', { timeZone: tz, weekday: 'long' });
+  const localDate = now.toLocaleDateString('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
 
-  sat.setHours(0, 0, 0, 0);
-  return { day: dayName, weekendStart: sat.toISOString().split('T')[0] };
+  // Find the Saturday of this weekend in local time
+  const [month, day, year] = localDate.split('/');
+  const localDay = new Date(`${year}-${month}-${day}`);
+  const daysToSat = { Sunday: -1, Saturday: 0, Monday: 6, Tuesday: 5, Wednesday: 4, Thursday: 3, Friday: 2 };
+  const offset = daysToSat[dayName] ?? 0;
+  const sat = new Date(localDay);
+  sat.setDate(localDay.getDate() + offset);
+
+  const label = (dayName === 'Saturday' || dayName === 'Sunday') ? dayName : 'Saturday';
+  return { day: label, weekendStart: sat.toISOString().split('T')[0] };
 }
 
 async function recordWin(name, campus) {
