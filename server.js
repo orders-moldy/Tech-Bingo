@@ -42,6 +42,11 @@ function makeCard() {
   return [...picked.slice(0, FREE_INDEX), 'FREE', ...picked.slice(FREE_INDEX)];
 }
 
+function broadcastPlayers() {
+  const names = Object.values(players).map(p => p.name);
+  io.emit('players', names);
+}
+
 function hasBingo(marked) {
   const s = new Set(marked);
   return WIN_LINES.some(line => line.every(i => s.has(i)));
@@ -54,7 +59,7 @@ io.on('connection', socket => {
     const marked = [FREE_INDEX];
     players[socket.id] = { name, card, marked, gameId: game.id };
     socket.emit('joined', { card, marked, gameId: game.id, winner: game.winner });
-    io.emit('player_count', Object.keys(players).length);
+    broadcastPlayers();
   });
 
   socket.on('mark', idx => {
@@ -86,7 +91,7 @@ io.on('connection', socket => {
 
   socket.on('disconnect', () => {
     delete players[socket.id];
-    io.emit('player_count', Object.keys(players).length);
+    broadcastPlayers();
   });
 });
 
