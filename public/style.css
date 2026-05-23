@@ -45,9 +45,10 @@ body {
 }
 
 .join-box h1 {
-  font-size: 3.5rem;
+  font-size: clamp(1.5rem, 6vw, 2.2rem);
   font-weight: 900;
-  letter-spacing: 0.25em;
+  letter-spacing: 0.02em;
+  text-align: center;
   color: var(--gold);
   text-shadow: 0 0 40px rgba(155,182,191,0.4);
 }
@@ -108,9 +109,9 @@ header {
 }
 
 .logo {
-  font-size: 1.5rem;
+  font-size: 1.1rem;
   font-weight: 900;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.03em;
   color: var(--gold);
   text-shadow: 0 0 20px rgba(155,182,191,0.3);
 }
