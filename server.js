@@ -19,7 +19,8 @@ const AUTO_RESET_SECONDS = 6;
 const allPhrases = JSON.parse(fs.readFileSync('phrases.json', 'utf8'));
 let gameCount = 0;
 let recentLog = [];
-let players = {};
+let players = {};      // socketId   -> playerState
+let devicePlayers = {}; // deviceId   -> playerState (persists across disconnects)
 let game = { id: 0, active: true, winner: null };
 
 // ── Database setup (falls back to in-memory if no DATABASE_URL) ──
@@ -269,13 +270,32 @@ function startNewGame() {
 }
 
 io.on('connection', socket => {
-  socket.on('join', async ({ name, campus }) => {
+  socket.on('join', async ({ name, campus, deviceId }) => {
     if (players[socket.id]) return;
-    const card = makeCard();
-    const marked = [FREE_INDEX];
-    players[socket.id] = { name, campus, card, marked, gameId: game.id };
+
+    let state = deviceId ? devicePlayers[deviceId] : null;
+
+    if (state) {
+      // Returning device — detach from any old socket and restore state
+      const oldSocket = Object.entries(players).find(([, p]) => p === state)?.[0];
+      if (oldSocket) delete players[oldSocket];
+
+      // If the game has moved on since they left, give them a fresh card
+      if (state.gameId !== game.id) {
+        state.card   = makeCard();
+        state.marked = [FREE_INDEX];
+        state.gameId = game.id;
+        state.hot    = false;
+      }
+    } else {
+      // Brand new player
+      state = { name, campus, card: makeCard(), marked: [FREE_INDEX], gameId: game.id, hot: false, deviceId: deviceId || null };
+      if (deviceId) devicePlayers[deviceId] = state;
+    }
+
+    players[socket.id] = state;
     const scoreboard = await getScoreboard().catch(() => ({ list: [], weekendLeader: null, satLeader: null, sunLeader: null }));
-    socket.emit('joined', { card, marked, gameId: game.id, winner: game.winner, scoreboard });
+    socket.emit('joined', { card: state.card, marked: state.marked, gameId: state.gameId, winner: game.winner, scoreboard, name: state.name });
     broadcastPlayers();
   });
 
@@ -303,11 +323,14 @@ io.on('connection', socket => {
   });
 
   socket.on('leave', () => {
+    const p = players[socket.id];
+    if (p?.deviceId) delete devicePlayers[p.deviceId];
     delete players[socket.id];
     broadcastPlayers();
   });
 
   socket.on('disconnect', () => {
+    // Keep devicePlayers so they can reconnect to their card
     delete players[socket.id];
     broadcastPlayers();
   });

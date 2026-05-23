@@ -9,6 +9,15 @@ let countdownTimer = null;
 
 const CAMPUSES = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
 
+function getDeviceId() {
+  let id = localStorage.getItem('bingo_device_id');
+  if (!id) {
+    id = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    localStorage.setItem('bingo_device_id', id);
+  }
+  return id;
+}
+
 const $ = id => document.getElementById(id);
 
 const joinScreen  = $('join-screen');
@@ -48,10 +57,11 @@ function doJoin() {
   myName = name;
   myCampus = campus;
   $('join-btn').disabled = true;
-  socket.emit('join', { name, campus });
+  socket.emit('join', { name, campus, deviceId: getDeviceId() });
 }
 
-socket.on('joined', ({ card, marked, gameId, winner, scoreboard }) => {
+socket.on('joined', ({ card, marked, gameId, winner, scoreboard, name: canonicalName }) => {
+  if (canonicalName) myName = canonicalName; // use server's name (handles rejoins)
   myCard   = card;
   myMarked = new Set(marked);
   myGameId = gameId;
@@ -109,10 +119,9 @@ socket.on('new_game', ({ card, marked, gameId }) => {
 socket.on('scoreboard_update', updateScoreboard);
 
 socket.on('connect', () => {
-  if (!gameScreen.classList.contains('hidden')) {
-    gameScreen.classList.add('hidden');
-    joinScreen.classList.remove('hidden');
-    $('join-btn').disabled = false;
+  if (myName) {
+    // Reconnect — rejoin silently with same device ID
+    socket.emit('join', { name: myName, campus: myCampus, deviceId: getDeviceId() });
   }
 });
 
