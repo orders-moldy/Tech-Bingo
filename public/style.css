@@ -382,14 +382,17 @@ header {
 
 #players-list {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
 }
 
 .campus-group {
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 0;
 }
 
 .campus-name {
@@ -398,12 +401,13 @@ header {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--gold);
+  white-space: nowrap;
 }
 
 .campus-chips {
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .player-chip {
