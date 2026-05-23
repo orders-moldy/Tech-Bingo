@@ -214,6 +214,11 @@ io.on('connection', socket => {
     }
   });
 
+  socket.on('leave', () => {
+    delete players[socket.id];
+    broadcastPlayers();
+  });
+
   socket.on('disconnect', () => {
     delete players[socket.id];
     broadcastPlayers();

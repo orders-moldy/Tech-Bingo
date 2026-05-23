@@ -24,6 +24,18 @@ const leadersEl   = $('leaders');
 
 $('name-input').addEventListener('keydown', e => { if (e.key === 'Enter') doJoin(); });
 $('join-btn').addEventListener('click', doJoin);
+$('logo').addEventListener('click', goToJoin);
+
+function goToJoin() {
+  if (gameScreen.classList.contains('hidden')) return;
+  socket.emit('leave');
+  myCard = []; myMarked = new Set(); myName = ''; myCampus = '';
+  clearInterval(countdownTimer);
+  winOverlay.classList.add('hidden');
+  gameScreen.classList.add('hidden');
+  joinScreen.classList.remove('hidden');
+  $('join-btn').disabled = false;
+}
 
 function doJoin() {
   const name = $('name-input').value.trim();

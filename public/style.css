@@ -135,44 +135,54 @@ header {
   letter-spacing: 0.03em;
   color: var(--gold);
   text-shadow: 0 0 20px rgba(155,182,191,0.3);
+  cursor: pointer;
+  transition: opacity 0.15s;
 }
+.logo:hover { opacity: 0.7; }
 
 #player-count {
   color: var(--muted);
   font-size: 0.85rem;
 }
 
-/* ── Two-column layout ── */
+/* ── Two-column grid layout ── */
 
 #content {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 5px 16px;
   width: 100%;
   max-width: 860px;
   padding: 0 12px;
 }
 
-/* ── Scoreboard ── */
-
-#scoreboard {
-  width: 190px;
-  flex-shrink: 0;
-  background: var(--surface);
-  border-radius: 14px;
-  padding: 14px;
-  position: sticky;
-  top: 12px;
-}
-
-.panel-title {
+/* Row 1: scoreboard title + BINGO letters */
+#sb-title {
+  grid-column: 1; grid-row: 1;
+  align-self: end;
   font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--gold);
-  margin-bottom: 12px;
+  padding-bottom: 5px;
+}
+
+/* Row 2: scoreboard panel + card */
+#scoreboard {
+  grid-column: 1; grid-row: 2;
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 14px;
+  align-self: start;
+  position: sticky;
+  top: 12px;
+}
+
+/* Row 3: players section (col 2 only) */
+#players-section {
+  grid-column: 2; grid-row: 3;
 }
 
 .empty-state {
@@ -274,22 +284,13 @@ header {
   flex-shrink: 0;
 }
 
-/* ── Main card area ── */
-
-#main-area {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
+/* ── Col headers (row 1, col 2) ── */
 
 #col-headers {
+  grid-column: 2; grid-row: 1;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 5px;
-  width: 100%;
-  margin-bottom: 1px;
 }
 
 #col-headers div {
@@ -300,13 +301,13 @@ header {
   padding: 2px 0 5px;
 }
 
-/* ── Card ── */
+/* ── Card (row 2, col 2) ── */
 
 #card {
+  grid-column: 2; grid-row: 2;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 5px;
-  width: 100%;
 }
 
 .cell {
@@ -366,7 +367,6 @@ header {
 /* ── Players list ── */
 
 #players-section {
-  width: 100%;
   padding: 12px 0 0;
   display: flex;
   flex-direction: column;
@@ -424,20 +424,17 @@ header {
   color: var(--gold);
 }
 
-/* ── Mobile: stack scoreboard below card ── */
+/* ── Mobile: single column, scoreboard below card ── */
 
 @media (max-width: 620px) {
   #content {
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
-  #scoreboard {
-    width: 100%;
-    position: static;
-    order: 2;
-  }
-  #main-area {
-    order: 1;
-  }
+  #sb-title        { grid-column: 1; grid-row: 4; }
+  #col-headers     { grid-column: 1; grid-row: 1; }
+  #card            { grid-column: 1; grid-row: 2; }
+  #players-section { grid-column: 1; grid-row: 3; }
+  #scoreboard      { grid-column: 1; grid-row: 5; position: static; }
 }
 
 /* ── Win Overlay ── */
