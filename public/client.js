@@ -94,7 +94,7 @@ function showWin(winner) {
 function fireConfetti(big) {
   if (typeof confetti === 'undefined') return;
   const count = big ? 250 : 120;
-  confetti({ particleCount: count, spread: 80, origin: { y: 0.55 }, colors: ['#f5c518', '#ffffff', '#ffd740', '#ff6b6b', '#4ecdc4'] });
+  confetti({ particleCount: count, spread: 80, origin: { y: 0.55 }, colors: ['#9BB6BF', '#ffffff', '#b3cdd5', '#ff6b6b', '#4ecdc4'] });
   if (big) {
     setTimeout(() => confetti({ particleCount: 80, angle: 60,  spread: 55, origin: { x: 0, y: 0.6 } }), 200);
     setTimeout(() => confetti({ particleCount: 80, angle: 120, spread: 55, origin: { x: 1, y: 0.6 } }), 350);

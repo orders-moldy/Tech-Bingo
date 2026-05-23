@@ -3,8 +3,8 @@
 :root {
   --bg: #0f0f23;
   --surface: #1c1c3a;
-  --gold: #f5c518;
-  --gold-hover: #ffd740;
+  --gold: #9BB6BF;
+  --gold-hover: #b3cdd5;
   --text: #e8e8f0;
   --muted: #666;
   --marked-text: #0f0f23;
@@ -49,7 +49,7 @@ body {
   font-weight: 900;
   letter-spacing: 0.25em;
   color: var(--gold);
-  text-shadow: 0 0 40px rgba(245,197,24,0.4);
+  text-shadow: 0 0 40px rgba(155,182,191,0.4);
 }
 
 .join-box p {
@@ -112,7 +112,7 @@ header {
   font-weight: 900;
   letter-spacing: 0.2em;
   color: var(--gold);
-  text-shadow: 0 0 20px rgba(245,197,24,0.3);
+  text-shadow: 0 0 20px rgba(155,182,191,0.3);
 }
 
 #player-count {
