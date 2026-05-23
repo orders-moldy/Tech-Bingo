@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bingo!</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="join-screen">
+    <div class="join-box">
+      <h1>BINGO</h1>
+      <p>Enter your name to get your card</p>
+      <input id="name-input" type="text" placeholder="Your name" maxlength="20" autocomplete="off">
+      <button id="join-btn">Play</button>
+    </div>
+  </div>
+
+  <div id="game-screen" class="hidden">
+    <header>
+      <span class="logo">BINGO</span>
+      <span id="player-count"></span>
+    </header>
+    <div id="col-headers">
+      <div>B</div><div>I</div><div>N</div><div>G</div><div>O</div>
+    </div>
+    <div id="card"></div>
+  </div>
+
+  <div id="win-overlay" class="hidden">
+    <div class="win-box">
+      <div class="win-emoji">🎉</div>
+      <h2 id="win-message"></h2>
+      <button id="new-game-btn">New Game</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
