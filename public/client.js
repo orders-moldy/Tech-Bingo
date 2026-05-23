@@ -5,6 +5,7 @@ let myMarked = new Set();
 let myGameId = null;
 let myName = '';
 let myCampus = '';
+let countdownTimer = null;
 
 const CAMPUSES = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
 
@@ -15,12 +16,13 @@ const gameScreen  = $('game-screen');
 const winOverlay  = $('win-overlay');
 const cardEl      = $('card');
 const winMsg      = $('win-message');
+const countdownEl = $('countdown');
 const playerCount = $('player-count');
 const playersList = $('players-list');
+const scoreList   = $('score-list');
 
 $('name-input').addEventListener('keydown', e => { if (e.key === 'Enter') doJoin(); });
 $('join-btn').addEventListener('click', doJoin);
-$('new-game-btn').addEventListener('click', () => socket.emit('new_game'));
 
 function doJoin() {
   const name = $('name-input').value.trim();
@@ -36,26 +38,28 @@ function doJoin() {
   socket.emit('join', { name, campus });
 }
 
-socket.on('joined', ({ card, marked, gameId, winner }) => {
+socket.on('joined', ({ card, marked, gameId, winner, scoreboard }) => {
   myCard   = card;
   myMarked = new Set(marked);
   myGameId = gameId;
   joinScreen.classList.add('hidden');
   gameScreen.classList.remove('hidden');
   renderCard();
-  if (winner) showWin(winner);
+  updateScoreboard(scoreboard);
+  if (winner) {
+    // Joined mid-countdown — show overlay but don't restart timer
+    winMsg.textContent = `${winner} got BINGO!`;
+    winOverlay.classList.remove('hidden');
+  }
 });
 
 socket.on('players', players => {
   playerCount.textContent = `${players.length} player${players.length !== 1 ? 's' : ''}`;
-
-  // Group by campus, preserving the defined order
   const groups = {};
   players.forEach(p => {
     if (!groups[p.campus]) groups[p.campus] = [];
     groups[p.campus].push(p.name);
   });
-
   playersList.innerHTML = CAMPUSES
     .filter(c => groups[c])
     .map(c => `
@@ -68,12 +72,20 @@ socket.on('players', players => {
     `).join('');
 });
 
-socket.on('bingo', winner => showWin(winner));
+socket.on('bingo', ({ winner, scoreboard, resetIn }) => {
+  const isMe = winner === myName;
+  winMsg.textContent = isMe ? '🎉 You got BINGO!' : `${winner} got BINGO!`;
+  winOverlay.classList.remove('hidden');
+  updateScoreboard(scoreboard);
+  fireConfetti(isMe);
+  startCountdown(resetIn);
+});
 
 socket.on('new_game', ({ card, marked, gameId }) => {
   myCard   = card;
   myMarked = new Set(marked);
   myGameId = gameId;
+  clearInterval(countdownTimer);
   winOverlay.classList.add('hidden');
   renderCard();
 });
@@ -85,6 +97,21 @@ socket.on('connect', () => {
     $('join-btn').disabled = false;
   }
 });
+
+function startCountdown(seconds) {
+  clearInterval(countdownTimer);
+  let remaining = seconds;
+  countdownEl.textContent = `New game starting in ${remaining}…`;
+  countdownTimer = setInterval(() => {
+    remaining--;
+    if (remaining > 0) {
+      countdownEl.textContent = `New game starting in ${remaining}…`;
+    } else {
+      clearInterval(countdownTimer);
+      countdownEl.textContent = 'Starting…';
+    }
+  }, 1000);
+}
 
 function renderCard() {
   cardEl.innerHTML = '';
@@ -108,9 +135,26 @@ function markCell(i) {
   socket.emit('mark', i);
 }
 
+function updateScoreboard(scoreboard) {
+  if (!scoreboard || scoreboard.length === 0) {
+    scoreList.innerHTML = '<p class="empty-state">No wins yet</p>';
+    return;
+  }
+  scoreList.innerHTML = scoreboard.map((entry, i) => `
+    <div class="score-item">
+      <div class="score-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}</div>
+      <div class="score-info">
+        <div class="score-name">${entry.name}</div>
+        <div class="score-campus">${entry.campus}</div>
+      </div>
+      <div class="score-wins">${entry.wins}</div>
+    </div>
+  `).join('');
+}
+
 function showWin(winner) {
   const isMe = winner === myName;
-  winMsg.textContent = isMe ? 'You got BINGO!' : `${winner} got BINGO!`;
+  winMsg.textContent = isMe ? '🎉 You got BINGO!' : `${winner} got BINGO!`;
   winOverlay.classList.remove('hidden');
   fireConfetti(isMe);
 }

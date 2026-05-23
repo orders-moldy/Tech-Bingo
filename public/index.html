@@ -31,13 +31,27 @@
       <span class="logo">TCC Tech Bingo</span>
       <span id="player-count"></span>
     </header>
-    <div id="col-headers">
-      <div>B</div><div>I</div><div>N</div><div>G</div><div>O</div>
-    </div>
-    <div id="card"></div>
-    <div id="players-section">
-      <div id="players-label">Playing now</div>
-      <div id="players-list"></div>
+
+    <div id="content">
+
+      <div id="scoreboard">
+        <div class="panel-title">🏆 Scoreboard</div>
+        <div id="score-list">
+          <p class="empty-state">No wins yet</p>
+        </div>
+      </div>
+
+      <div id="main-area">
+        <div id="col-headers">
+          <div>B</div><div>I</div><div>N</div><div>G</div><div>O</div>
+        </div>
+        <div id="card"></div>
+        <div id="players-section">
+          <div id="players-label">Playing now</div>
+          <div id="players-list"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -45,7 +59,7 @@
     <div class="win-box">
       <div class="win-emoji">🎉</div>
       <h2 id="win-message"></h2>
-      <button id="new-game-btn">New Game</button>
+      <p id="countdown" class="countdown"></p>
     </div>
   </div>
 

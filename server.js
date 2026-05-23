@@ -10,14 +10,16 @@ const io = new Server(server);
 app.use(express.static('public'));
 
 const FREE_INDEX = 12;
-const CARD_PHRASES = 24; // 25 cells minus the FREE space
-const COOLDOWN_GAMES = 3; // how many games before a phrase can reappear
+const CARD_PHRASES = 24;
+const COOLDOWN_GAMES = 3;
+const AUTO_RESET_SECONDS = 6; // countdown before next game starts
 
 const allPhrases = JSON.parse(fs.readFileSync('phrases.json', 'utf8'));
 let gameCount = 0;
-let recentLog = []; // [{ game: N, phrases: [...] }]
-let players = {};   // socketId -> { name, card, marked, gameId }
+let recentLog = [];
+let players = {};
 let game = { id: 0, active: true, winner: null };
+let scores = {}; // key: "name|campus" -> { name, campus, wins }
 
 const WIN_LINES = [
   [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14], [15,16,17,18,19], [20,21,22,23,24],
@@ -38,8 +40,11 @@ function makeCard() {
   const pool = getPool();
   const shuffled = pool.slice().sort(() => Math.random() - 0.5);
   const picked = shuffled.slice(0, CARD_PHRASES);
-  // Insert FREE in the center (index 12 of a 5x5 grid)
   return [...picked.slice(0, FREE_INDEX), 'FREE', ...picked.slice(FREE_INDEX)];
+}
+
+function getScoreboard() {
+  return Object.values(scores).sort((a, b) => b.wins - a.wins);
 }
 
 function broadcastPlayers() {
@@ -52,13 +57,28 @@ function hasBingo(marked) {
   return WIN_LINES.some(line => line.every(i => s.has(i)));
 }
 
+function startNewGame() {
+  gameCount++;
+  game = { id: gameCount, active: true, winner: null };
+  for (const [id, p] of Object.entries(players)) {
+    p.card = makeCard();
+    p.marked = [FREE_INDEX];
+    p.gameId = game.id;
+    io.to(id).emit('new_game', { card: p.card, marked: p.marked, gameId: game.id });
+  }
+}
+
 io.on('connection', socket => {
   socket.on('join', ({ name, campus }) => {
     if (players[socket.id]) return;
     const card = makeCard();
     const marked = [FREE_INDEX];
     players[socket.id] = { name, campus, card, marked, gameId: game.id };
-    socket.emit('joined', { card, marked, gameId: game.id, winner: game.winner });
+    socket.emit('joined', {
+      card, marked, gameId: game.id,
+      winner: game.winner,
+      scoreboard: getScoreboard()
+    });
     broadcastPlayers();
   });
 
@@ -71,21 +91,17 @@ io.on('connection', socket => {
     if (hasBingo(p.marked) && !game.winner) {
       game.winner = p.name;
       game.active = false;
-      // Log phrases from this card to cooldown pool
       recentLog.push({ game: gameCount, phrases: p.card.filter(c => c !== 'FREE') });
-      io.emit('bingo', p.name);
-    }
-  });
 
-  socket.on('new_game', () => {
-    if (game.active) return;
-    gameCount++;
-    game = { id: gameCount, active: true, winner: null };
-    for (const [id, p] of Object.entries(players)) {
-      p.card = makeCard();
-      p.marked = [FREE_INDEX];
-      p.gameId = game.id;
-      io.to(id).emit('new_game', { card: p.card, marked: p.marked, gameId: game.id });
+      // Update scoreboard
+      const key = `${p.name}|${p.campus}`;
+      if (!scores[key]) scores[key] = { name: p.name, campus: p.campus, wins: 0 };
+      scores[key].wins++;
+
+      io.emit('bingo', { winner: p.name, scoreboard: getScoreboard(), resetIn: AUTO_RESET_SECONDS });
+
+      // Auto-reset after countdown
+      setTimeout(startNewGame, AUTO_RESET_SECONDS * 1000);
     }
   });
 
