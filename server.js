@@ -185,7 +185,7 @@ async function sendSummaryEmail(scoreboard) {
 
   await transporter.sendMail({
     from: `TCC Tech Bingo <${process.env.GMAIL_USER}>`,
-    to: 'orders@ampliosystems.com',
+    to: 'mbeacom@ampliosystems.com',
     subject: 'TCC Tech Bingo — Weekend Leaderboard Summary',
     html: buildEmailHtml(scoreboard),
   });
