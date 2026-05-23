@@ -22,6 +22,7 @@ let recentLog = [];
 let players = {};      // socketId   -> playerState
 let devicePlayers = {}; // deviceId   -> playerState (persists across disconnects)
 let game = { id: 0, active: true, winner: null };
+let phraseCounts = {}; // phrase -> times marked across all players
 
 // ── Database setup (falls back to in-memory if no DATABASE_URL) ──
 
@@ -207,12 +208,13 @@ app.post('/admin/reset', async (req, res) => {
 
     if (pool) await pool.query('DELETE FROM wins');
     else memScores = {};
+    phraseCounts = {};
 
     // Send summary email in background (don't block the response)
     sendSummaryEmail(scoreboard).catch(err => console.error('Email failed:', err.message));
 
     const empty = await getScoreboard();
-    io.emit('scoreboard_update', empty);
+    io.emit('scoreboard_update', { ...empty, popularTiles: [] });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Reset failed' });
@@ -249,6 +251,13 @@ function hasBingo(marked) {
 function isOneAway(marked) {
   const s = new Set(marked);
   return WIN_LINES.some(line => line.filter(i => !s.has(i)).length === 1);
+}
+
+function getPopularTiles() {
+  return Object.entries(phraseCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([phrase]) => phrase);
 }
 
 function broadcastPlayers() {
@@ -295,7 +304,7 @@ io.on('connection', socket => {
 
     players[socket.id] = state;
     const scoreboard = await getScoreboard().catch(() => ({ list: [], weekendLeader: null, satLeader: null, sunLeader: null }));
-    socket.emit('joined', { card: state.card, marked: state.marked, gameId: state.gameId, winner: game.winner, scoreboard, name: state.name });
+    socket.emit('joined', { card: state.card, marked: state.marked, gameId: state.gameId, winner: game.winner, scoreboard, name: state.name, popularTiles: getPopularTiles() });
     broadcastPlayers();
   });
 
@@ -304,6 +313,12 @@ io.on('connection', socket => {
     if (!p || idx === FREE_INDEX || p.gameId !== game.id || !game.active) return;
     if (p.marked.includes(idx)) return;
     p.marked.push(idx);
+
+    // Track phrase popularity
+    const phrase = p.card[idx];
+    if (phrase && phrase !== 'FREE') {
+      phraseCounts[phrase] = (phraseCounts[phrase] || 0) + 1;
+    }
 
     const wasHot = p.hot || false;
     p.hot = !hasBingo(p.marked) && isOneAway(p.marked);
@@ -317,7 +332,7 @@ io.on('connection', socket => {
       try { await recordWin(p.name, p.campus); } catch (err) { console.error('recordWin failed:', err); }
       const scoreboard = await getScoreboard().catch(() => ({ list: [], weekendLeader: null, satLeader: null, sunLeader: null }));
 
-      io.emit('bingo', { winner: p.name, scoreboard, resetIn: AUTO_RESET_SECONDS });
+      io.emit('bingo', { winner: p.name, scoreboard, resetIn: AUTO_RESET_SECONDS, popularTiles: getPopularTiles() });
       setTimeout(startNewGame, AUTO_RESET_SECONDS * 1000);
     }
   });

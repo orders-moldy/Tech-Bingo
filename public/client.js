@@ -60,17 +60,16 @@ function doJoin() {
   socket.emit('join', { name, campus, deviceId: getDeviceId() });
 }
 
-socket.on('joined', ({ card, marked, gameId, winner, scoreboard, name: canonicalName }) => {
-  if (canonicalName) myName = canonicalName; // use server's name (handles rejoins)
+socket.on('joined', ({ card, marked, gameId, winner, scoreboard, name: canonicalName, popularTiles }) => {
+  if (canonicalName) myName = canonicalName;
   myCard   = card;
   myMarked = new Set(marked);
   myGameId = gameId;
   joinScreen.classList.add('hidden');
   gameScreen.classList.remove('hidden');
   renderCard();
-  updateScoreboard(scoreboard);
+  updateScoreboard({ ...scoreboard, popularTiles });
   if (winner) {
-    // Joined mid-countdown — show overlay but don't restart timer
     winMsg.textContent = `${winner} got BINGO!`;
     winOverlay.classList.remove('hidden');
   }
@@ -98,11 +97,11 @@ socket.on('players', players => {
     `).join('');
 });
 
-socket.on('bingo', ({ winner, scoreboard, resetIn }) => {
+socket.on('bingo', ({ winner, scoreboard, resetIn, popularTiles }) => {
   const isMe = winner === myName;
   winMsg.textContent = isMe ? '🎉 You got BINGO!' : `${winner} got BINGO!`;
   winOverlay.classList.remove('hidden');
-  updateScoreboard(scoreboard);
+  updateScoreboard({ ...scoreboard, popularTiles });
   fireConfetti(isMe);
   startCountdown(resetIn);
 });
@@ -162,7 +161,7 @@ function markCell(i) {
   socket.emit('mark', i);
 }
 
-function updateScoreboard({ list, weekendLeader, satLeader, sunLeader } = {}) {
+function updateScoreboard({ list, weekendLeader, satLeader, sunLeader, popularTiles } = {}) {
   if (!list || list.length === 0) {
     leadersEl.innerHTML = '';
     scoreList.innerHTML = '<p class="empty-state">No wins yet</p>';
@@ -200,6 +199,21 @@ function updateScoreboard({ list, weekendLeader, satLeader, sunLeader } = {}) {
       </div>
     `).join('')}
   `;
+
+  // Popular tiles (show after 4+ total wins)
+  const totalWins = list.reduce((s, p) => s + p.total, 0);
+  const popularBox = $('popular-box');
+  if (popularTiles && popularTiles.length > 0 && totalWins >= 4) {
+    $('popular-list').innerHTML = popularTiles.map((phrase, i) => `
+      <div class="popular-item">
+        <span class="popular-rank">${i + 1}.</span>
+        <span class="popular-phrase">${phrase}</span>
+      </div>
+    `).join('');
+    popularBox.classList.remove('hidden');
+  } else {
+    popularBox.classList.add('hidden');
+  }
 }
 
 function showWin(winner) {
