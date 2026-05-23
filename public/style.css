@@ -532,3 +532,205 @@ header {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+/* ── Stats Overlay ── */
+
+#stats-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 200;
+}
+
+.stats-box {
+  background: var(--surface);
+  border-radius: 24px;
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-shadow: 0 8px 60px rgba(0,0,0,0.7);
+  animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.stats-header {
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: var(--gold);
+  text-align: center;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 30px rgba(155,182,191,0.4);
+}
+
+.stats-columns {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+}
+
+.stats-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stats-divider {
+  width: 1px;
+  background: #252545;
+  align-self: stretch;
+  margin: 0 24px;
+  flex-shrink: 0;
+}
+
+.stats-col-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+}
+
+/* Big leader cards in stats overlay */
+.stats-leader {
+  background: #13132e;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.stats-leader-medal {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.stats-leader-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.stats-leader-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.stats-leader-name {
+  font-size: 1.05rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats-leader-campus {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.stats-leader-wins {
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+/* Score rows in stats overlay */
+.stats-score-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #252545;
+}
+
+.stats-score-item:last-child { border-bottom: none; }
+
+.stats-score-rank {
+  font-size: 1.2rem;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.stats-score-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.stats-score-name {
+  font-size: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats-score-campus {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.stats-score-wins {
+  font-size: 1.4rem;
+  font-weight: 900;
+  color: var(--gold);
+  flex-shrink: 0;
+}
+
+/* Popular tiles in stats overlay */
+.stats-popular-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #252545;
+}
+
+.stats-popular-item:last-child { border-bottom: none; }
+
+.stats-popular-rank {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+  width: 32px;
+  text-align: center;
+}
+
+.stats-popular-phrase {
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.stats-no-data {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+@media (max-width: 520px) {
+  .stats-columns {
+    flex-direction: column;
+    gap: 24px;
+  }
+  .stats-divider {
+    width: auto;
+    height: 1px;
+    margin: 0;
+    align-self: stretch;
+  }
+}

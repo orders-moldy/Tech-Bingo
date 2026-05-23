@@ -60,7 +60,7 @@ function doJoin() {
   socket.emit('join', { name, campus, deviceId: getDeviceId() });
 }
 
-socket.on('joined', ({ card, marked, gameId, winner, scoreboard, name: canonicalName, popularTiles }) => {
+socket.on('joined', ({ card, marked, gameId, winner, scoreboard, name: canonicalName, popularTiles, suspended }) => {
   if (canonicalName) myName = canonicalName;
   myCard   = card;
   myMarked = new Set(marked);
@@ -73,6 +73,7 @@ socket.on('joined', ({ card, marked, gameId, winner, scoreboard, name: canonical
     winMsg.textContent = `${winner} got BINGO!`;
     winOverlay.classList.remove('hidden');
   }
+  if (suspended) showStatsOverlay({ ...scoreboard, popularTiles });
 });
 
 socket.on('players', players => {
@@ -116,6 +117,14 @@ socket.on('new_game', ({ card, marked, gameId }) => {
 });
 
 socket.on('scoreboard_update', updateScoreboard);
+
+socket.on('suspend', ({ scoreboard, popularTiles }) => {
+  showStatsOverlay({ ...scoreboard, popularTiles });
+});
+
+socket.on('resume', () => {
+  $('stats-overlay').classList.add('hidden');
+});
 
 socket.on('connect', () => {
   if (myName) {
@@ -188,7 +197,7 @@ function updateScoreboard({ list, weekendLeader, satLeader, sunLeader, popularTi
   // Full list
   scoreList.innerHTML = `
     <div class="score-divider"></div>
-    ${list.map((entry, i) => `
+    ${list.slice(0, 3).map((entry, i) => `
       <div class="score-item">
         <div class="score-rank">${['🥇','🥈','🥉'][i] ?? `${i+1}.`}</div>
         <div class="score-info">
@@ -214,6 +223,52 @@ function updateScoreboard({ list, weekendLeader, satLeader, sunLeader, popularTi
   } else {
     popularBox.classList.add('hidden');
   }
+}
+
+function showStatsOverlay({ list, weekendLeader, satLeader, sunLeader, popularTiles } = {}) {
+  const medals = ['🥇', '🥈', '🥉'];
+
+  // Leaders section
+  const leaderCard = (medal, label, entry, wins) => `
+    <div class="stats-leader">
+      <div class="stats-leader-medal">${medal}</div>
+      <div class="stats-leader-info">
+        <div class="stats-leader-label">${label}</div>
+        <div class="stats-leader-name">${entry.name}</div>
+        <div class="stats-leader-campus">${entry.campus}</div>
+      </div>
+      <div class="stats-leader-wins">${wins}</div>
+    </div>`;
+
+  $('stats-leaders').innerHTML = [
+    weekendLeader ? leaderCard('🏆', 'Weekend Leader', weekendLeader, weekendLeader.total) : '',
+    satLeader     ? leaderCard('📅', 'Saturday',       satLeader,     satLeader.saturday)  : '',
+    sunLeader     ? leaderCard('📅', 'Sunday',         sunLeader,     sunLeader.sunday)    : '',
+  ].join('');
+
+  // Full top-3 list
+  const top3 = (list || []).slice(0, 3);
+  $('stats-list').innerHTML = top3.length ? top3.map((entry, i) => `
+    <div class="stats-score-item">
+      <div class="stats-score-rank">${medals[i] ?? `${i+1}.`}</div>
+      <div class="stats-score-info">
+        <div class="stats-score-name">${entry.name}</div>
+        <div class="stats-score-campus">${entry.campus}</div>
+      </div>
+      <div class="stats-score-wins">${entry.total}</div>
+    </div>
+  `).join('') : '<p class="stats-no-data">No wins yet</p>';
+
+  // Popular tiles
+  const popularRankIcons = ['🔥', '2️⃣', '3️⃣'];
+  $('stats-popular').innerHTML = popularTiles && popularTiles.length ? popularTiles.map((phrase, i) => `
+    <div class="stats-popular-item">
+      <div class="stats-popular-rank">${popularRankIcons[i] ?? `${i+1}.`}</div>
+      <div class="stats-popular-phrase">${phrase}</div>
+    </div>
+  `).join('') : '<p class="stats-no-data">Not enough data yet</p>';
+
+  $('stats-overlay').classList.remove('hidden');
 }
 
 function showWin(winner) {

@@ -23,6 +23,7 @@ let players = {};      // socketId   -> playerState
 let devicePlayers = {}; // deviceId   -> playerState (persists across disconnects)
 let game = { id: 0, active: true, winner: null };
 let phraseCounts = {}; // phrase -> times marked across all players
+let suspended = false; // when true, marking is paused and stats overlay shown
 
 // ── Database setup (falls back to in-memory if no DATABASE_URL) ──
 
@@ -221,6 +222,27 @@ app.post('/admin/reset', async (req, res) => {
   }
 });
 
+// ── Admin suspend endpoint ──
+
+app.get('/admin/status', (req, res) => {
+  res.json({ suspended });
+});
+
+app.post('/admin/suspend', async (req, res) => {
+  const { password, active } = req.body;
+  if (!process.env.ADMIN_PASSWORD || password !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  suspended = (active === false); // active:false = suspend, active:true = resume
+  if (suspended) {
+    const scoreboard = await getScoreboard().catch(() => ({ list: [], weekendLeader: null, satLeader: null, sunLeader: null }));
+    io.emit('suspend', { scoreboard, popularTiles: getPopularTiles() });
+  } else {
+    io.emit('resume');
+  }
+  res.json({ ok: true, suspended });
+});
+
 // ── Game logic ──
 
 const WIN_LINES = [
@@ -304,13 +326,13 @@ io.on('connection', socket => {
 
     players[socket.id] = state;
     const scoreboard = await getScoreboard().catch(() => ({ list: [], weekendLeader: null, satLeader: null, sunLeader: null }));
-    socket.emit('joined', { card: state.card, marked: state.marked, gameId: state.gameId, winner: game.winner, scoreboard, name: state.name, popularTiles: getPopularTiles() });
+    socket.emit('joined', { card: state.card, marked: state.marked, gameId: state.gameId, winner: game.winner, scoreboard, name: state.name, popularTiles: getPopularTiles(), suspended });
     broadcastPlayers();
   });
 
   socket.on('mark', async idx => {
     const p = players[socket.id];
-    if (!p || idx === FREE_INDEX || p.gameId !== game.id || !game.active) return;
+    if (!p || idx === FREE_INDEX || p.gameId !== game.id || !game.active || suspended) return;
     if (p.marked.includes(idx)) return;
     p.marked.push(idx);
 

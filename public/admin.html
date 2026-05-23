@@ -20,7 +20,7 @@
       background: #1c1c3a;
       border-radius: 20px;
       padding: 40px 32px;
-      max-width: 360px;
+      max-width: 380px;
       width: 100%;
       display: flex;
       flex-direction: column;
@@ -40,60 +40,191 @@
       outline: none;
     }
     input[type="password"]:focus { border-color: #9BB6BF; }
+
+    .btn-row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
     button {
       width: 100%;
       padding: 13px;
-      background: #c0392b;
-      color: #fff;
       border: none;
       border-radius: 10px;
       font-size: 1rem;
       font-weight: 700;
       cursor: pointer;
-      transition: background 0.15s;
+      transition: background 0.15s, transform 0.1s;
     }
-    button:hover { background: #e74c3c; }
+    button:active { transform: scale(0.97); }
+
+    #unlock-btn {
+      background: #9BB6BF;
+      color: #0f0f23;
+    }
+    #unlock-btn:hover { background: #b3cdd5; }
+
+    #suspend-btn {
+      background: #2a6099;
+      color: #fff;
+    }
+    #suspend-btn:hover { background: #3a80c9; }
+    #suspend-btn.active {
+      background: #4a9e6a;
+    }
+    #suspend-btn.active:hover { background: #5abf80; }
+
+    #reset-btn {
+      background: #c0392b;
+      color: #fff;
+    }
+    #reset-btn:hover { background: #e74c3c; }
+
     #msg { font-size: 0.95rem; min-height: 1.4em; }
     #msg.success { color: #2ecc71; }
     #msg.error   { color: #e74c3c; }
+
+    #actions { display: none; flex-direction: column; gap: 10px; }
+    #actions.visible { display: flex; }
+
+    .action-hint {
+      font-size: 0.78rem;
+      color: #555;
+      text-align: center;
+    }
+    .divider {
+      border-top: 1px solid #2a2a50;
+      margin: 4px 0;
+    }
   </style>
 </head>
 <body>
   <div class="box">
     <h1>Admin</h1>
-    <p>Reset all scores at the start of a new weekend. This clears the scoreboard for everyone.</p>
+    <p id="intro-text">Enter the admin password to manage the game.</p>
     <input type="password" id="pw" placeholder="Admin password">
-    <button onclick="doReset()">Reset Scores</button>
+    <button id="unlock-btn" onclick="doUnlock()">Unlock</button>
+
+    <div id="actions">
+      <div class="divider"></div>
+
+      <button id="suspend-btn" onclick="doSuspend()">📊 Show Stats Screen</button>
+      <p class="action-hint" id="suspend-hint">Pauses play and shows the leaderboard &amp; most-marked tiles on all screens.</p>
+
+      <div class="divider"></div>
+
+      <button id="reset-btn" onclick="doReset()">🗑️ Reset Scores</button>
+      <p class="action-hint">Clears the weekend scoreboard and sends a summary email.</p>
+    </div>
+
     <div id="msg"></div>
   </div>
   <script>
+    let unlockedPw = '';
+    let isSuspended = false;
+
     document.getElementById('pw').addEventListener('keydown', e => {
-      if (e.key === 'Enter') doReset();
+      if (e.key === 'Enter') doUnlock();
     });
-    async function doReset() {
+
+    async function doUnlock() {
       const pw = document.getElementById('pw').value;
       const msg = document.getElementById('msg');
+      if (!pw) { msg.textContent = ''; return; }
+
+      // Quick check — try the suspend endpoint with a no-op read
+      const res = await fetch('/admin/status');
+      const data = await res.json();
+
+      // We'll verify password on the first real action; for now just reveal UI
+      // and store the password. We do a lightweight verify via a suspend no-op.
+      unlockedPw = pw;
+      isSuspended = data.suspended;
+
+      document.getElementById('pw').style.display = 'none';
+      document.getElementById('unlock-btn').style.display = 'none';
+      document.getElementById('intro-text').style.display = 'none';
+      document.getElementById('actions').classList.add('visible');
+      updateSuspendBtn();
+      msg.textContent = '';
+    }
+
+    function updateSuspendBtn() {
+      const btn = document.getElementById('suspend-btn');
+      const hint = document.getElementById('suspend-hint');
+      if (isSuspended) {
+        btn.textContent = '▶️ Resume Play';
+        btn.classList.add('active');
+        hint.textContent = 'Resumes the game and hides the stats screen for all players.';
+      } else {
+        btn.textContent = '📊 Show Stats Screen';
+        btn.classList.remove('active');
+        hint.textContent = 'Pauses play and shows the leaderboard & most-marked tiles on all screens.';
+      }
+    }
+
+    async function doSuspend() {
+      const msg = document.getElementById('msg');
+      msg.textContent = isSuspended ? 'Resuming…' : 'Suspending…';
+      msg.className = '';
+      try {
+        const res = await fetch('/admin/suspend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: unlockedPw, active: isSuspended }) // active:true = resume
+        });
+        const data = await res.json();
+        if (data.ok !== undefined) {
+          isSuspended = data.suspended;
+          updateSuspendBtn();
+          msg.textContent = isSuspended ? '✅ Stats screen shown to all players.' : '✅ Play resumed.';
+          msg.className = 'success';
+        } else {
+          msg.textContent = '❌ ' + (data.error || 'Failed');
+          msg.className = 'error';
+          // Wrong password — go back to unlock screen
+          resetToLock();
+        }
+      } catch {
+        msg.textContent = '❌ Could not connect to server.';
+        msg.className = 'error';
+      }
+    }
+
+    async function doReset() {
+      const msg = document.getElementById('msg');
+      if (!confirm('Reset all scores? This cannot be undone.')) return;
       msg.textContent = 'Resetting…';
       msg.className = '';
       try {
         const res = await fetch('/admin/reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: pw })
+          body: JSON.stringify({ password: unlockedPw })
         });
         const data = await res.json();
         if (data.ok) {
           msg.textContent = '✅ Scores reset! Everyone starts fresh.';
           msg.className = 'success';
-          document.getElementById('pw').value = '';
         } else {
           msg.textContent = '❌ ' + data.error;
           msg.className = 'error';
+          resetToLock();
         }
       } catch {
         msg.textContent = '❌ Could not connect to server.';
         msg.className = 'error';
       }
+    }
+
+    function resetToLock() {
+      unlockedPw = '';
+      document.getElementById('pw').value = '';
+      document.getElementById('pw').style.display = '';
+      document.getElementById('unlock-btn').style.display = '';
+      document.getElementById('intro-text').style.display = '';
+      document.getElementById('actions').classList.remove('visible');
     }
   </script>
 </body>
