@@ -20,6 +20,7 @@ const countdownEl = $('countdown');
 const playerCount = $('player-count');
 const playersList = $('players-list');
 const scoreList   = $('score-list');
+const leadersEl   = $('leaders');
 
 $('name-input').addEventListener('keydown', e => { if (e.key === 'Enter') doJoin(); });
 $('join-btn').addEventListener('click', doJoin);
@@ -90,6 +91,8 @@ socket.on('new_game', ({ card, marked, gameId }) => {
   renderCard();
 });
 
+socket.on('scoreboard_update', updateScoreboard);
+
 socket.on('connect', () => {
   if (!gameScreen.classList.contains('hidden')) {
     gameScreen.classList.add('hidden');
@@ -135,21 +138,44 @@ function markCell(i) {
   socket.emit('mark', i);
 }
 
-function updateScoreboard(scoreboard) {
-  if (!scoreboard || scoreboard.length === 0) {
+function updateScoreboard({ list, weekendLeader, satLeader, sunLeader } = {}) {
+  if (!list || list.length === 0) {
+    leadersEl.innerHTML = '';
     scoreList.innerHTML = '<p class="empty-state">No wins yet</p>';
     return;
   }
-  scoreList.innerHTML = scoreboard.map((entry, i) => `
-    <div class="score-item">
-      <div class="score-rank">${i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}</div>
-      <div class="score-info">
-        <div class="score-name">${entry.name}</div>
-        <div class="score-campus">${entry.campus}</div>
+
+  // Leaders
+  const leaderCard = (icon, label, entry, wins) => `
+    <div class="leader-item">
+      <div class="leader-left">
+        <div class="leader-label">${icon} ${label}</div>
+        <div class="leader-name">${entry.name}</div>
+        <div class="leader-campus">${entry.campus}</div>
       </div>
-      <div class="score-wins">${entry.wins}</div>
-    </div>
-  `).join('');
+      <div class="leader-wins">${wins}</div>
+    </div>`;
+
+  leadersEl.innerHTML = [
+    weekendLeader ? leaderCard('🏆', 'Weekend', weekendLeader, weekendLeader.total) : '',
+    satLeader     ? leaderCard('📅', 'Saturday', satLeader, satLeader.saturday)     : '',
+    sunLeader     ? leaderCard('📅', 'Sunday',   sunLeader, sunLeader.sunday)       : '',
+  ].join('');
+
+  // Full list
+  scoreList.innerHTML = `
+    <div class="score-divider"></div>
+    ${list.map((entry, i) => `
+      <div class="score-item">
+        <div class="score-rank">${['🥇','🥈','🥉'][i] ?? `${i+1}.`}</div>
+        <div class="score-info">
+          <div class="score-name">${entry.name}</div>
+          <div class="score-campus">${entry.campus}</div>
+        </div>
+        <div class="score-wins">${entry.total}</div>
+      </div>
+    `).join('')}
+  `;
 }
 
 function showWin(winner) {

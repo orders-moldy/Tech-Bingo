@@ -182,6 +182,48 @@ header {
   padding: 8px 0;
 }
 
+.leader-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #13132e;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
+.leader-left { flex: 1; min-width: 0; }
+
+.leader-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.leader-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leader-campus {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.leader-wins {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--gold);
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
 .score-item {
   display: flex;
   align-items: center;
@@ -191,6 +233,11 @@ header {
 }
 
 .score-item:last-child { border-bottom: none; }
+
+.score-divider {
+  border-top: 1px solid #252545;
+  margin: 10px 0 6px;
+}
 
 .score-rank {
   font-size: 1rem;
