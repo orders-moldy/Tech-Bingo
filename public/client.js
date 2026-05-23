@@ -71,7 +71,7 @@ socket.on('players', players => {
   const groups = {};
   players.forEach(p => {
     if (!groups[p.campus]) groups[p.campus] = [];
-    groups[p.campus].push(p.name);
+    groups[p.campus].push(p);
   });
   playersList.innerHTML = CAMPUSES
     .filter(c => groups[c])
@@ -79,7 +79,10 @@ socket.on('players', players => {
       <div class="campus-group">
         <div class="campus-name">${c}</div>
         <div class="campus-chips">
-          ${groups[c].map(n => `<span class="player-chip${n === myName ? ' me' : ''}">${n}</span>`).join('')}
+          ${groups[c].map(p => {
+            const classes = ['player-chip', p.name === myName ? 'me' : '', p.hot ? 'hot' : ''].filter(Boolean).join(' ');
+            return `<span class="${classes}">${p.name}</span>`;
+          }).join('')}
         </div>
       </div>
     `).join('');

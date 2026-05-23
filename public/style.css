@@ -397,12 +397,13 @@ header {
 }
 
 .campus-name {
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.82rem;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--gold);
   white-space: nowrap;
+  margin-bottom: 3px;
 }
 
 .campus-chips {
@@ -423,6 +424,19 @@ header {
 .player-chip.me {
   border-color: var(--gold);
   color: var(--gold);
+}
+
+@keyframes hot-glow {
+  0%, 100% { box-shadow: 0 0 2px rgba(155, 182, 191, 0.0); }
+  50%       { box-shadow: 0 0 8px rgba(155, 182, 191, 0.55); }
+}
+
+.player-chip.hot {
+  animation: hot-glow 2.5s ease-in-out infinite;
+}
+
+.player-chip.hot:not(.me) {
+  border-color: rgba(155, 182, 191, 0.35);
 }
 
 /* ── Mobile: single column, scoreboard below card ── */

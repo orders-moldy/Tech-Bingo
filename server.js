@@ -168,8 +168,13 @@ function hasBingo(marked) {
   return WIN_LINES.some(line => line.every(i => s.has(i)));
 }
 
+function isOneAway(marked) {
+  const s = new Set(marked);
+  return WIN_LINES.some(line => line.filter(i => !s.has(i)).length === 1);
+}
+
 function broadcastPlayers() {
-  const list = Object.values(players).map(p => ({ name: p.name, campus: p.campus }));
+  const list = Object.values(players).map(p => ({ name: p.name, campus: p.campus, hot: p.hot || false }));
   io.emit('players', list);
 }
 
@@ -180,8 +185,10 @@ function startNewGame() {
     p.card = makeCard();
     p.marked = [FREE_INDEX];
     p.gameId = game.id;
+    p.hot = false;
     io.to(id).emit('new_game', { card: p.card, marked: p.marked, gameId: game.id });
   }
+  broadcastPlayers();
 }
 
 io.on('connection', socket => {
@@ -200,6 +207,10 @@ io.on('connection', socket => {
     if (!p || idx === FREE_INDEX || p.gameId !== game.id || !game.active) return;
     if (p.marked.includes(idx)) return;
     p.marked.push(idx);
+
+    const wasHot = p.hot || false;
+    p.hot = !hasBingo(p.marked) && isOneAway(p.marked);
+    if (p.hot !== wasHot) broadcastPlayers();
 
     if (hasBingo(p.marked) && !game.winner) {
       game.winner = p.name;
