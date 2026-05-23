@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const server = http.createServer(app);
@@ -123,6 +124,75 @@ async function getScoreboard() {
   };
 }
 
+// ── Email ──
+
+function buildEmailHtml({ list, weekendLeader, satLeader, sunLeader }) {
+  const row = (icon, label, entry, wins) => `
+    <tr>
+      <td style="padding:6px 12px;font-size:15px;">${icon}</td>
+      <td style="padding:6px 12px;">
+        <strong>${label}</strong><br>
+        <span style="color:#555;">${entry.name} &mdash; ${entry.campus}</span>
+      </td>
+      <td style="padding:6px 12px;font-size:1.3rem;font-weight:800;color:#9BB6BF;text-align:right;">${wins}</td>
+    </tr>`;
+
+  const leaders = [
+    weekendLeader ? row('🏆', 'Weekend Leader', weekendLeader, weekendLeader.total) : '',
+    satLeader     ? row('📅', 'Saturday Leader', satLeader,     satLeader.saturday)  : '',
+    sunLeader     ? row('📅', 'Sunday Leader',   sunLeader,     sunLeader.sunday)    : '',
+  ].join('');
+
+  const fullList = list.map((e, i) => `
+    <tr style="border-top:1px solid #eee;">
+      <td style="padding:5px 12px;color:#999;">${i + 1}.</td>
+      <td style="padding:5px 12px;">${e.name} <span style="color:#aaa;font-size:0.85em;">${e.campus}</span></td>
+      <td style="padding:5px 12px;text-align:right;">
+        ${e.total} total
+        <span style="color:#aaa;font-size:0.8em;">(Sat&nbsp;${e.saturday} / Sun&nbsp;${e.sunday})</span>
+      </td>
+    </tr>`).join('');
+
+  return `
+    <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;color:#222;">
+      <h2 style="color:#9BB6BF;margin-bottom:4px;">TCC Tech Bingo</h2>
+      <p style="color:#777;margin-top:0;">Weekend leaderboard summary (captured at reset)</p>
+
+      ${leaders ? `
+      <table style="width:100%;border-collapse:collapse;background:#f9f9f9;border-radius:8px;margin-bottom:24px;">
+        ${leaders}
+      </table>` : '<p style="color:#aaa;">No wins recorded this weekend.</p>'}
+
+      ${list.length ? `
+      <h3 style="margin-bottom:8px;">Full Scoreboard</h3>
+      <table style="width:100%;border-collapse:collapse;">
+        ${fullList}
+      </table>` : ''}
+    </div>`;
+}
+
+async function sendSummaryEmail(scoreboard) {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    console.log('No email credentials — skipping summary email');
+    return;
+  }
+  if (!scoreboard.list.length) return; // nothing to report
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
+  });
+
+  await transporter.sendMail({
+    from: `TCC Tech Bingo <${process.env.GMAIL_USER}>`,
+    to: 'orders@ampliosystems.com',
+    subject: 'TCC Tech Bingo — Weekend Leaderboard Summary',
+    html: buildEmailHtml(scoreboard),
+  });
+
+  console.log('Summary email sent');
+}
+
 // ── Admin reset endpoint ──
 
 app.post('/admin/reset', async (req, res) => {
@@ -131,10 +201,17 @@ app.post('/admin/reset', async (req, res) => {
     return res.status(401).json({ error: 'Wrong password' });
   }
   try {
+    // Capture scoreboard BEFORE wiping
+    const scoreboard = await getScoreboard();
+
     if (pool) await pool.query('DELETE FROM wins');
     else memScores = {};
-    const scoreboard = await getScoreboard();
-    io.emit('scoreboard_update', scoreboard);
+
+    // Send summary email in background (don't block the response)
+    sendSummaryEmail(scoreboard).catch(err => console.error('Email failed:', err.message));
+
+    const empty = await getScoreboard();
+    io.emit('scoreboard_update', empty);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Reset failed' });
