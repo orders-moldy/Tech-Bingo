@@ -194,7 +194,6 @@
 
     async function doReset() {
       const msg = document.getElementById('msg');
-      if (!confirm('Reset all scores? This cannot be undone.')) return;
       msg.textContent = 'Resetting…';
       msg.className = '';
       try {
