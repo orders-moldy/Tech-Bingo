@@ -43,8 +43,8 @@ function makeCard() {
 }
 
 function broadcastPlayers() {
-  const names = Object.values(players).map(p => p.name);
-  io.emit('players', names);
+  const list = Object.values(players).map(p => ({ name: p.name, campus: p.campus }));
+  io.emit('players', list);
 }
 
 function hasBingo(marked) {
@@ -53,11 +53,11 @@ function hasBingo(marked) {
 }
 
 io.on('connection', socket => {
-  socket.on('join', name => {
+  socket.on('join', ({ name, campus }) => {
     if (players[socket.id]) return;
     const card = makeCard();
     const marked = [FREE_INDEX];
-    players[socket.id] = { name, card, marked, gameId: game.id };
+    players[socket.id] = { name, campus, card, marked, gameId: game.id };
     socket.emit('joined', { card, marked, gameId: game.id, winner: game.winner });
     broadcastPlayers();
   });

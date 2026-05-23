@@ -72,6 +72,26 @@ input[type="text"] {
 
 input[type="text"]:focus { border-color: var(--gold); }
 
+select {
+  width: 100%;
+  padding: 13px 16px;
+  background: var(--bg);
+  border: 2px solid #2a2a50;
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 1rem;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%239BB6BF' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  transition: border-color 0.15s;
+}
+
+select:focus { border-color: var(--gold); }
+select option { background: #1c1c3a; }
+
 button {
   width: 100%;
   padding: 13px;
@@ -225,8 +245,28 @@ header {
 
 #players-list {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.campus-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.campus-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+.campus-chips {
+  display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 5px;
 }
 
 .player-chip {

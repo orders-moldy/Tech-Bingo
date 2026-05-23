@@ -4,6 +4,9 @@ let myCard = [];
 let myMarked = new Set();
 let myGameId = null;
 let myName = '';
+let myCampus = '';
+
+const CAMPUSES = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
 
 const $ = id => document.getElementById(id);
 
@@ -21,10 +24,16 @@ $('new-game-btn').addEventListener('click', () => socket.emit('new_game'));
 
 function doJoin() {
   const name = $('name-input').value.trim();
-  if (!name) return;
+  const campus = $('campus-select').value;
+  if (!name || !campus) {
+    if (!name) $('name-input').focus();
+    else $('campus-select').focus();
+    return;
+  }
   myName = name;
+  myCampus = campus;
   $('join-btn').disabled = true;
-  socket.emit('join', name);
+  socket.emit('join', { name, campus });
 }
 
 socket.on('joined', ({ card, marked, gameId, winner }) => {
@@ -37,11 +46,26 @@ socket.on('joined', ({ card, marked, gameId, winner }) => {
   if (winner) showWin(winner);
 });
 
-socket.on('players', names => {
-  playerCount.textContent = `${names.length} player${names.length !== 1 ? 's' : ''}`;
-  playersList.innerHTML = names
-    .map(n => `<span class="player-chip${n === myName ? ' me' : ''}">${n}</span>`)
-    .join('');
+socket.on('players', players => {
+  playerCount.textContent = `${players.length} player${players.length !== 1 ? 's' : ''}`;
+
+  // Group by campus, preserving the defined order
+  const groups = {};
+  players.forEach(p => {
+    if (!groups[p.campus]) groups[p.campus] = [];
+    groups[p.campus].push(p.name);
+  });
+
+  playersList.innerHTML = CAMPUSES
+    .filter(c => groups[c])
+    .map(c => `
+      <div class="campus-group">
+        <div class="campus-name">${c}</div>
+        <div class="campus-chips">
+          ${groups[c].map(n => `<span class="player-chip${n === myName ? ' me' : ''}">${n}</span>`).join('')}
+        </div>
+      </div>
+    `).join('');
 });
 
 socket.on('bingo', winner => showWin(winner));
