@@ -1,63 +1,60 @@
-# Bingo
+# TCC Tech Bingo
 
-Multiplayer buzzword bingo for live events. Players listen to a speaker and tap tiles when they hear a phrase. First to get 5 in a row wins.
+Multiplayer buzzword bingo for live services. Players listen to the speaker and tap tiles when they hear a phrase. First to get 5 in a row wins — then everyone automatically gets a fresh card.
 
-## Setup
+**Live at:** https://tech-bingo.onrender.com
 
-### 1. Install Node.js
+## Features
 
-Download and run the installer from **https://nodejs.org** (choose the LTS version).
+- **Multiplayer** — everyone with the link plays live via Socket.io
+- **Campus grouping** — players join under their campus (Plainfield, Bolingbrook, South Naperville, Naperville, Hinsdale, Wheaton)
+- **Weekend scoreboard** — Saturday, Sunday, and overall Weekend leaders, persisted in PostgreSQL (times are Chicago-local, so the 6pm Saturday service counts correctly)
+- **Top 3 leaderboard** — gold / silver / bronze
+- **Phrase rotation** — phrases from winning cards sit out for 3 games so cards stay fresh
+- **Most Marked tiles** — top 3 phrases appear in the sidebar after 4+ weekend wins
+- **Hot glow** — players one tile away from bingo pulse in the player list
+- **Device ID anti-cheat** — one game per device; opening a second tab signs out the first
+- **Auto reset** — 6-second countdown after a bingo, then new cards for everyone
 
-### 2. Install dependencies
+## Admin (`/admin.html`)
+
+Enter the admin password to unlock two controls:
+
+1. **📊 Show Stats Screen** — pauses play and pushes a full-screen leaderboard + most-marked-tiles summary to every player. Click again to resume.
+2. **🗑️ Reset Scores** — clears the weekend scoreboard and emails a summary (leaders, full list, most-marked tiles).
+
+## Editing phrases
+
+Edit **`phrases.json`** — a plain list of strings. Keep 30+ so cards vary (the game picks 24 per card). Watch for a trailing comma after the last phrase — that breaks the deploy.
+
+After editing:
 
 ```bash
-cd bingo
+git add phrases.json
+git commit -m "Update phrases"
+git push
+```
+
+Render redeploys automatically on push.
+
+## Environment variables (set in Render)
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Neon PostgreSQL connection string (scores persist across server sleeps) |
+| `ADMIN_PASSWORD` | Password for `/admin.html` |
+| `GMAIL_USER` | Gmail address that sends the summary email |
+| `GMAIL_APP_PASSWORD` | Gmail app password for that account |
+
+Without `DATABASE_URL`, scores fall back to memory and reset when the server sleeps. Without the Gmail vars, the reset still works — it just skips the email.
+
+## Run locally
+
+```bash
 npm install
-```
-
-### 3. Customize your phrases
-
-Edit **`phrases.json`** — it's just a list of strings. Add as many as you want (50+ recommended so cards vary). The game picks 24 randomly per card and rotates recently-used phrases out after each win.
-
-```json
-[
-  "your custom phrase",
-  "another phrase",
-  ...
-]
-```
-
-### 4. Run locally
-
-```bash
 npm start
 ```
 
-Open `http://localhost:3000` in a browser. Share your machine's local IP (e.g. `http://192.168.1.x:3000`) so others on the same Wi-Fi can join.
+Open `http://localhost:3000`. Share your machine's local IP (e.g. `http://192.168.1.x:3000`) so others on the same Wi-Fi can join.
 
----
-
-## Deploy to the web (Render)
-
-So anyone with a link can play from anywhere:
-
-1. Push this folder to a GitHub repo
-2. Go to **https://render.com** → New → Web Service
-3. Connect your GitHub repo
-4. Set:
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
-   - **Environment:** Node
-5. Deploy — Render gives you a public URL to share
-
-> Render's free tier spins down after 15 min of inactivity. For a weekly event, just open the URL a minute before you start so it wakes up.
-
----
-
-## How it works
-
-- Each player joins with their name and gets a unique 5×5 card
-- Center square is always FREE
-- Tap a tile when you hear the phrase — the server registers it
-- First to complete a row, column, or diagonal triggers a BINGO announcement for everyone
-- Anyone can click **New Game** — all players get fresh cards with rotated phrases
+> Render's free tier spins down after 15 min of inactivity. Open the URL a minute before the service starts so it wakes up.

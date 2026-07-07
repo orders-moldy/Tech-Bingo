@@ -3,14 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0c0c1e">
   <title>TCC Tech Bingo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
+  <!-- Join screen -->
   <div id="join-screen">
     <div class="join-box">
-      <h1>Welcome to TCC Tech Bingo!</h1>
+      <div class="join-mark">B</div>
+      <h1>Welcome to<br>TCC Tech Bingo!</h1>
       <p>Enter your name and select your campus</p>
       <input id="name-input" type="text" placeholder="Your name" maxlength="20" autocomplete="off">
       <select id="campus-select">
@@ -23,9 +29,11 @@
         <option>Wheaton</option>
       </select>
       <button id="join-btn">Play</button>
+      <p id="join-msg" class="join-msg"></p>
     </div>
   </div>
 
+  <!-- Game screen -->
   <div id="game-screen" class="hidden">
     <header>
       <span class="logo" id="logo">TCC Tech Bingo</span>
@@ -58,6 +66,7 @@
     </div>
   </div>
 
+  <!-- Bingo win overlay -->
   <div id="win-overlay" class="hidden">
     <div class="win-box">
       <div class="win-emoji">🎉</div>
@@ -66,6 +75,7 @@
     </div>
   </div>
 
+  <!-- Admin-triggered stats overlay -->
   <div id="stats-overlay" class="hidden">
     <div class="stats-box">
       <div class="stats-header">📊 Weekend Stats</div>

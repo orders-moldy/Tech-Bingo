@@ -1,14 +1,34 @@
+// ─────────────────────────────────────────────────────────────
+//  TCC Tech Bingo — client
+//
+//  Sections:
+//    1. State & helpers
+//    2. Join / leave flow
+//    3. Socket events
+//    4. Card rendering & marking
+//    5. Scoreboard & stats overlay
+//    6. Confetti
+// ─────────────────────────────────────────────────────────────
+
 const socket = io();
+
+// ── 1. State & helpers ──
 
 let myCard = [];
 let myMarked = new Set();
-let myGameId = null;
 let myName = '';
 let myCampus = '';
 let countdownTimer = null;
 
 const CAMPUSES = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
 
+const $ = id => document.getElementById(id);
+
+// Escape user-provided text before inserting into innerHTML (names, campuses)
+const esc = s => String(s).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Stable per-device ID so one person can't play from 10 browser tabs
 function getDeviceId() {
   let id = localStorage.getItem('bingo_device_id');
   if (!id) {
@@ -18,11 +38,10 @@ function getDeviceId() {
   return id;
 }
 
-const $ = id => document.getElementById(id);
-
 const joinScreen  = $('join-screen');
 const gameScreen  = $('game-screen');
 const winOverlay  = $('win-overlay');
+const statsOverlay = $('stats-overlay');
 const cardEl      = $('card');
 const winMsg      = $('win-message');
 const countdownEl = $('countdown');
@@ -30,21 +49,13 @@ const playerCount = $('player-count');
 const playersList = $('players-list');
 const scoreList   = $('score-list');
 const leadersEl   = $('leaders');
+const joinMsg     = $('join-msg');
+
+// ── 2. Join / leave flow ──
 
 $('name-input').addEventListener('keydown', e => { if (e.key === 'Enter') doJoin(); });
 $('join-btn').addEventListener('click', doJoin);
 $('logo').addEventListener('click', goToJoin);
-
-function goToJoin() {
-  if (gameScreen.classList.contains('hidden')) return;
-  socket.emit('leave');
-  myCard = []; myMarked = new Set(); myName = ''; myCampus = '';
-  clearInterval(countdownTimer);
-  winOverlay.classList.add('hidden');
-  gameScreen.classList.add('hidden');
-  joinScreen.classList.remove('hidden');
-  $('join-btn').disabled = false;
-}
 
 function doJoin() {
   const name = $('name-input').value.trim();
@@ -56,15 +67,35 @@ function doJoin() {
   }
   myName = name;
   myCampus = campus;
+  joinMsg.textContent = '';
   $('join-btn').disabled = true;
   socket.emit('join', { name, campus, deviceId: getDeviceId() });
 }
 
-socket.on('joined', ({ card, marked, gameId, winner, scoreboard, name: canonicalName, popularTiles, suspended }) => {
+// Tap the logo to return to the join screen (also forgets this device on the server)
+function goToJoin() {
+  if (gameScreen.classList.contains('hidden')) return;
+  socket.emit('leave');
+  showJoinScreen();
+}
+
+function showJoinScreen(message = '') {
+  myCard = []; myMarked = new Set(); myName = ''; myCampus = '';
+  clearInterval(countdownTimer);
+  winOverlay.classList.add('hidden');
+  statsOverlay.classList.add('hidden');
+  gameScreen.classList.add('hidden');
+  joinScreen.classList.remove('hidden');
+  joinMsg.textContent = message;
+  $('join-btn').disabled = false;
+}
+
+// ── 3. Socket events ──
+
+socket.on('joined', ({ card, marked, winner, scoreboard, name: canonicalName, popularTiles, suspended }) => {
   if (canonicalName) myName = canonicalName;
   myCard   = card;
   myMarked = new Set(marked);
-  myGameId = gameId;
   joinScreen.classList.add('hidden');
   gameScreen.classList.remove('hidden');
   renderCard();
@@ -87,11 +118,11 @@ socket.on('players', players => {
     .filter(c => groups[c])
     .map(c => `
       <div class="campus-group">
-        <div class="campus-name">${c}</div>
+        <div class="campus-name">${esc(c)}</div>
         <div class="campus-chips">
           ${groups[c].map(p => {
             const classes = ['player-chip', p.name === myName ? 'me' : '', p.hot ? 'hot' : ''].filter(Boolean).join(' ');
-            return `<span class="${classes}">${p.name}</span>`;
+            return `<span class="${classes}">${esc(p.name)}</span>`;
           }).join('')}
         </div>
       </div>
@@ -107,10 +138,9 @@ socket.on('bingo', ({ winner, scoreboard, resetIn, popularTiles }) => {
   startCountdown(resetIn);
 });
 
-socket.on('new_game', ({ card, marked, gameId }) => {
+socket.on('new_game', ({ card, marked }) => {
   myCard   = card;
   myMarked = new Set(marked);
-  myGameId = gameId;
   clearInterval(countdownTimer);
   winOverlay.classList.add('hidden');
   renderCard();
@@ -123,30 +153,22 @@ socket.on('suspend', ({ scoreboard, popularTiles }) => {
 });
 
 socket.on('resume', () => {
-  $('stats-overlay').classList.add('hidden');
+  statsOverlay.classList.add('hidden');
 });
 
+// This device joined from another tab — this tab is no longer in the game
+socket.on('kicked', () => {
+  showJoinScreen('You joined from another tab, so this one signed out.');
+});
+
+// Auto-rejoin after a dropped connection (server sleep, lost wifi)
 socket.on('connect', () => {
   if (myName) {
-    // Reconnect — rejoin silently with same device ID
     socket.emit('join', { name: myName, campus: myCampus, deviceId: getDeviceId() });
   }
 });
 
-function startCountdown(seconds) {
-  clearInterval(countdownTimer);
-  let remaining = seconds;
-  countdownEl.textContent = `New game starting in ${remaining}…`;
-  countdownTimer = setInterval(() => {
-    remaining--;
-    if (remaining > 0) {
-      countdownEl.textContent = `New game starting in ${remaining}…`;
-    } else {
-      clearInterval(countdownTimer);
-      countdownEl.textContent = 'Starting…';
-    }
-  }, 1000);
-}
+// ── 4. Card rendering & marking ──
 
 function renderCard() {
   cardEl.innerHTML = '';
@@ -170,20 +192,37 @@ function markCell(i) {
   socket.emit('mark', i);
 }
 
+function startCountdown(seconds) {
+  clearInterval(countdownTimer);
+  let remaining = seconds;
+  countdownEl.textContent = `New game starting in ${remaining}…`;
+  countdownTimer = setInterval(() => {
+    remaining--;
+    if (remaining > 0) {
+      countdownEl.textContent = `New game starting in ${remaining}…`;
+    } else {
+      clearInterval(countdownTimer);
+      countdownEl.textContent = 'Starting…';
+    }
+  }, 1000);
+}
+
+// ── 5. Scoreboard & stats overlay ──
+
 function updateScoreboard({ list, weekendLeader, satLeader, sunLeader, popularTiles } = {}) {
   if (!list || list.length === 0) {
     leadersEl.innerHTML = '';
     scoreList.innerHTML = '<p class="empty-state">No wins yet</p>';
+    $('popular-box').classList.add('hidden');
     return;
   }
 
-  // Leaders
   const leaderCard = (icon, label, entry, wins) => `
     <div class="leader-item">
       <div class="leader-left">
         <div class="leader-label">${icon} ${label}</div>
-        <div class="leader-name">${entry.name}</div>
-        <div class="leader-campus">${entry.campus}</div>
+        <div class="leader-name">${esc(entry.name)}</div>
+        <div class="leader-campus">${esc(entry.campus)}</div>
       </div>
       <div class="leader-wins">${wins}</div>
     </div>`;
@@ -194,29 +233,29 @@ function updateScoreboard({ list, weekendLeader, satLeader, sunLeader, popularTi
     sunLeader     ? leaderCard('📅', 'Sunday',   sunLeader, sunLeader.sunday)       : '',
   ].join('');
 
-  // Full list
+  // Top 3 — gold, silver, bronze
   scoreList.innerHTML = `
     <div class="score-divider"></div>
     ${list.slice(0, 3).map((entry, i) => `
       <div class="score-item">
-        <div class="score-rank">${['🥇','🥈','🥉'][i] ?? `${i+1}.`}</div>
+        <div class="score-rank">${['🥇', '🥈', '🥉'][i]}</div>
         <div class="score-info">
-          <div class="score-name">${entry.name}</div>
-          <div class="score-campus">${entry.campus}</div>
+          <div class="score-name">${esc(entry.name)}</div>
+          <div class="score-campus">${esc(entry.campus)}</div>
         </div>
         <div class="score-wins">${entry.total}</div>
       </div>
     `).join('')}
   `;
 
-  // Popular tiles (show after 4+ total wins)
+  // Most-marked tiles appear once the weekend has 4+ wins
   const totalWins = list.reduce((s, p) => s + p.total, 0);
   const popularBox = $('popular-box');
   if (popularTiles && popularTiles.length > 0 && totalWins >= 4) {
     $('popular-list').innerHTML = popularTiles.map((phrase, i) => `
       <div class="popular-item">
         <span class="popular-rank">${i + 1}.</span>
-        <span class="popular-phrase">${phrase}</span>
+        <span class="popular-phrase">${esc(phrase)}</span>
       </div>
     `).join('');
     popularBox.classList.remove('hidden');
@@ -225,17 +264,17 @@ function updateScoreboard({ list, weekendLeader, satLeader, sunLeader, popularTi
   }
 }
 
+// Full-screen stats view, pushed by the admin's "Show Stats Screen" button
 function showStatsOverlay({ list, weekendLeader, satLeader, sunLeader, popularTiles } = {}) {
   const medals = ['🥇', '🥈', '🥉'];
 
-  // Leaders section
   const leaderCard = (medal, label, entry, wins) => `
     <div class="stats-leader">
       <div class="stats-leader-medal">${medal}</div>
       <div class="stats-leader-info">
         <div class="stats-leader-label">${label}</div>
-        <div class="stats-leader-name">${entry.name}</div>
-        <div class="stats-leader-campus">${entry.campus}</div>
+        <div class="stats-leader-name">${esc(entry.name)}</div>
+        <div class="stats-leader-campus">${esc(entry.campus)}</div>
       </div>
       <div class="stats-leader-wins">${wins}</div>
     </div>`;
@@ -246,37 +285,30 @@ function showStatsOverlay({ list, weekendLeader, satLeader, sunLeader, popularTi
     sunLeader     ? leaderCard('📅', 'Sunday',         sunLeader,     sunLeader.sunday)    : '',
   ].join('');
 
-  // Full top-3 list
   const top3 = (list || []).slice(0, 3);
   $('stats-list').innerHTML = top3.length ? top3.map((entry, i) => `
     <div class="stats-score-item">
-      <div class="stats-score-rank">${medals[i] ?? `${i+1}.`}</div>
+      <div class="stats-score-rank">${medals[i]}</div>
       <div class="stats-score-info">
-        <div class="stats-score-name">${entry.name}</div>
-        <div class="stats-score-campus">${entry.campus}</div>
+        <div class="stats-score-name">${esc(entry.name)}</div>
+        <div class="stats-score-campus">${esc(entry.campus)}</div>
       </div>
       <div class="stats-score-wins">${entry.total}</div>
     </div>
   `).join('') : '<p class="stats-no-data">No wins yet</p>';
 
-  // Popular tiles
   const popularRankIcons = ['🔥', '2️⃣', '3️⃣'];
   $('stats-popular').innerHTML = popularTiles && popularTiles.length ? popularTiles.map((phrase, i) => `
     <div class="stats-popular-item">
-      <div class="stats-popular-rank">${popularRankIcons[i] ?? `${i+1}.`}</div>
-      <div class="stats-popular-phrase">${phrase}</div>
+      <div class="stats-popular-rank">${popularRankIcons[i]}</div>
+      <div class="stats-popular-phrase">${esc(phrase)}</div>
     </div>
   `).join('') : '<p class="stats-no-data">Not enough data yet</p>';
 
-  $('stats-overlay').classList.remove('hidden');
+  statsOverlay.classList.remove('hidden');
 }
 
-function showWin(winner) {
-  const isMe = winner === myName;
-  winMsg.textContent = isMe ? '🎉 You got BINGO!' : `${winner} got BINGO!`;
-  winOverlay.classList.remove('hidden');
-  fireConfetti(isMe);
-}
+// ── 6. Confetti ──
 
 function fireConfetti(big) {
   if (typeof confetti === 'undefined') return;

@@ -1,3 +1,16 @@
+// ─────────────────────────────────────────────────────────────
+//  TCC Tech Bingo — server
+//
+//  Sections:
+//    1. Config & state
+//    2. Database (PostgreSQL, falls back to in-memory)
+//    3. Scoreboard & weekend logic
+//    4. Email summary
+//    5. Admin endpoints (login / suspend / reset)
+//    6. Game logic (cards, win detection, phrase rotation)
+//    7. Socket handlers (join / mark / leave)
+// ─────────────────────────────────────────────────────────────
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -11,24 +24,44 @@ const io = new Server(server);
 app.use(express.static('public'));
 app.use(express.json());
 
-const FREE_INDEX = 12;
-const CARD_PHRASES = 24;
-const COOLDOWN_GAMES = 3;
-const AUTO_RESET_SECONDS = 6;
+// ── 1. Config & state ──
+
+const FREE_INDEX = 12;            // center square of the 5×5 card
+const CARD_SIZE = 25;
+const CARD_PHRASES = 24;          // phrases per card (24 + FREE)
+const COOLDOWN_GAMES = 3;         // games before a winning card's phrases can reappear
+const AUTO_RESET_SECONDS = 6;     // countdown after a bingo before new cards deal
+const MAX_NAME_LENGTH = 20;
+const DEVICE_EXPIRY_MS = 12 * 60 * 60 * 1000; // forget devices not seen for 12h
+const SUMMARY_EMAIL_TO = 'mbeacom@ampliosystems.com';
+
+const CAMPUSES = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
 
 const allPhrases = JSON.parse(fs.readFileSync('phrases.json', 'utf8'));
-let gameCount = 0;
-let recentLog = [];
-let players = {};      // socketId   -> playerState
-let devicePlayers = {}; // deviceId   -> playerState (persists across disconnects)
-let game = { id: 0, active: true, winner: null };
-let phraseCounts = {}; // phrase -> times marked across all players
-let suspended = false; // when true, marking is paused and stats overlay shown
 
-// ── Database setup (falls back to in-memory if no DATABASE_URL) ──
+let gameCount = 0;
+let recentLog = [];     // [{ game, phrases }] — winning cards, for phrase cooldown
+let players = {};       // socketId -> playerState
+let devicePlayers = {}; // deviceId -> playerState (survives disconnects)
+let game = { id: 0, active: true, winner: null };
+let phraseCounts = {};  // phrase -> times marked (drives "Most Marked")
+let suspended = false;  // admin paused play to show the stats screen
+
+// Reject anything a malicious client might sneak into a join payload.
+function cleanName(raw) {
+  if (typeof raw !== 'string') return null;
+  const name = raw.replace(/[<>]/g, '').trim().slice(0, MAX_NAME_LENGTH);
+  return name.length ? name : null;
+}
+
+function isValidCampus(campus) {
+  return CAMPUSES.includes(campus);
+}
+
+// ── 2. Database (falls back to in-memory if no DATABASE_URL) ──
 
 let pool = null;
-let memScores = {}; // fallback: "name|campus|day" -> { name, campus, day, wins }
+let memScores = {}; // "name|campus|day" -> { name, campus, day, wins }
 
 if (process.env.DATABASE_URL) {
   const { Pool } = require('pg');
@@ -56,21 +89,22 @@ async function initDB() {
   console.log('Database connected ✓');
 }
 
+// ── 3. Scoreboard & weekend logic ──
+
+// Weekend runs Saturday→Sunday in Chicago time (covers the 6pm Saturday service
+// even though the server runs in UTC). Weekday wins count toward the upcoming weekend.
 function getWeekendInfo() {
   const tz = process.env.TZ || 'America/Chicago';
   const now = new Date();
 
-  // Get the day of week and date string in the configured timezone
   const dayName = now.toLocaleDateString('en-US', { timeZone: tz, weekday: 'long' });
   const localDate = now.toLocaleDateString('en-US', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' });
 
-  // Find the Saturday of this weekend in local time
   const [month, day, year] = localDate.split('/');
   const localDay = new Date(`${year}-${month}-${day}`);
   const daysToSat = { Sunday: -1, Saturday: 0, Monday: 6, Tuesday: 5, Wednesday: 4, Thursday: 3, Friday: 2 };
-  const offset = daysToSat[dayName] ?? 0;
   const sat = new Date(localDay);
-  sat.setDate(localDay.getDate() + offset);
+  sat.setDate(localDay.getDate() + (daysToSat[dayName] ?? 0));
 
   const label = (dayName === 'Saturday' || dayName === 'Sunday') ? dayName : 'Saturday';
   return { day: label, weekendStart: sat.toISOString().split('T')[0] };
@@ -90,6 +124,8 @@ async function recordWin(name, campus) {
   }
 }
 
+const EMPTY_SCOREBOARD = { list: [], weekendLeader: null, satLeader: null, sunLeader: null };
+
 async function getScoreboard() {
   let rows = [];
 
@@ -106,7 +142,6 @@ async function getScoreboard() {
     rows = Object.values(memScores);
   }
 
-  // Aggregate per player
   const byPlayer = {};
   for (const row of rows) {
     const key = `${row.name}|${row.campus}`;
@@ -127,9 +162,9 @@ async function getScoreboard() {
   };
 }
 
-// ── Email ──
+// ── 4. Email summary ──
 
-function buildEmailHtml({ list, weekendLeader, satLeader, sunLeader }) {
+function buildEmailHtml({ list, weekendLeader, satLeader, sunLeader }, popularTiles) {
   const row = (icon, label, entry, wins) => `
     <tr>
       <td style="padding:6px 12px;font-size:15px;">${icon}</td>
@@ -156,6 +191,12 @@ function buildEmailHtml({ list, weekendLeader, satLeader, sunLeader }) {
       </td>
     </tr>`).join('');
 
+  const popular = (popularTiles || []).map((phrase, i) => `
+    <tr style="border-top:1px solid #eee;">
+      <td style="padding:5px 12px;color:#999;">${i + 1}.</td>
+      <td style="padding:5px 12px;">${phrase}</td>
+    </tr>`).join('');
+
   return `
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;color:#222;">
       <h2 style="color:#9BB6BF;margin-bottom:4px;">TCC Tech Bingo</h2>
@@ -168,13 +209,19 @@ function buildEmailHtml({ list, weekendLeader, satLeader, sunLeader }) {
 
       ${list.length ? `
       <h3 style="margin-bottom:8px;">Full Scoreboard</h3>
-      <table style="width:100%;border-collapse:collapse;">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
         ${fullList}
+      </table>` : ''}
+
+      ${popular ? `
+      <h3 style="margin-bottom:8px;">🔥 Most Marked Tiles</h3>
+      <table style="width:100%;border-collapse:collapse;">
+        ${popular}
       </table>` : ''}
     </div>`;
 }
 
-async function sendSummaryEmail(scoreboard) {
+async function sendSummaryEmail(scoreboard, popularTiles) {
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
     console.log('No email credentials — skipping summary email');
     return;
@@ -188,54 +235,38 @@ async function sendSummaryEmail(scoreboard) {
 
   await transporter.sendMail({
     from: `TCC Tech Bingo <${process.env.GMAIL_USER}>`,
-    to: 'mbeacom@ampliosystems.com',
+    to: SUMMARY_EMAIL_TO,
     subject: 'TCC Tech Bingo — Weekend Leaderboard Summary',
-    html: buildEmailHtml(scoreboard),
+    html: buildEmailHtml(scoreboard, popularTiles),
   });
 
   console.log('Summary email sent');
 }
 
-// ── Admin reset endpoint ──
+// ── 5. Admin endpoints ──
 
-app.post('/admin/reset', async (req, res) => {
-  const { password } = req.body;
-  if (!process.env.ADMIN_PASSWORD || password !== process.env.ADMIN_PASSWORD) {
+function checkPassword(password) {
+  return Boolean(process.env.ADMIN_PASSWORD) && password === process.env.ADMIN_PASSWORD;
+}
+
+// Verifies the password up front so the admin page only unlocks for real admins.
+app.post('/admin/login', (req, res) => {
+  if (!checkPassword(req.body.password)) {
     return res.status(401).json({ error: 'Wrong password' });
   }
-  try {
-    // Capture scoreboard BEFORE wiping
-    const scoreboard = await getScoreboard();
-
-    if (pool) await pool.query('DELETE FROM wins');
-    else memScores = {};
-    phraseCounts = {};
-
-    // Send summary email in background (don't block the response)
-    sendSummaryEmail(scoreboard).catch(err => console.error('Email failed:', err.message));
-
-    const empty = await getScoreboard();
-    io.emit('scoreboard_update', { ...empty, popularTiles: [] });
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ error: 'Reset failed' });
-  }
+  res.json({ ok: true, suspended });
 });
 
-// ── Admin suspend endpoint ──
-
-app.get('/admin/status', (req, res) => {
-  res.json({ suspended });
-});
-
+// Suspend pauses all marking and pushes the stats overlay to every player.
+// { active: true } resumes play, { active: false } suspends it.
 app.post('/admin/suspend', async (req, res) => {
   const { password, active } = req.body;
-  if (!process.env.ADMIN_PASSWORD || password !== process.env.ADMIN_PASSWORD) {
+  if (!checkPassword(password)) {
     return res.status(401).json({ error: 'Wrong password' });
   }
-  suspended = (active === false); // active:false = suspend, active:true = resume
+  suspended = (active === false);
   if (suspended) {
-    const scoreboard = await getScoreboard().catch(() => ({ list: [], weekendLeader: null, satLeader: null, sunLeader: null }));
+    const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
     io.emit('suspend', { scoreboard, popularTiles: getPopularTiles() });
   } else {
     io.emit('resume');
@@ -243,7 +274,36 @@ app.post('/admin/suspend', async (req, res) => {
   res.json({ ok: true, suspended });
 });
 
-// ── Game logic ──
+app.post('/admin/reset', async (req, res) => {
+  if (!checkPassword(req.body.password)) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  try {
+    // Capture stats BEFORE wiping so the email has something to report
+    const scoreboard = await getScoreboard();
+    const popularTiles = getPopularTiles();
+
+    if (pool) await pool.query('DELETE FROM wins');
+    else memScores = {};
+    phraseCounts = {};
+
+    sendSummaryEmail(scoreboard, popularTiles).catch(err => console.error('Email failed:', err.message));
+
+    // A reset means the event is over — make sure nobody is stuck on the stats screen
+    if (suspended) {
+      suspended = false;
+      io.emit('resume');
+    }
+
+    io.emit('scoreboard_update', { ...EMPTY_SCOREBOARD, popularTiles: [] });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Reset failed:', err.message);
+    res.status(500).json({ error: 'Reset failed' });
+  }
+});
+
+// ── 6. Game logic ──
 
 const WIN_LINES = [
   [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14], [15,16,17,18,19], [20,21,22,23,24],
@@ -251,16 +311,17 @@ const WIN_LINES = [
   [0,6,12,18,24], [4,8,12,16,20],
 ];
 
-function getPool() {
+// Phrases from recent winning cards sit out for COOLDOWN_GAMES games so
+// cards feel fresh week to week. Falls back to the full list if too few remain.
+function getPhrasePool() {
   const cutoff = gameCount - COOLDOWN_GAMES;
   const onCooldown = new Set(recentLog.filter(e => e.game > cutoff).flatMap(e => e.phrases));
-  const pool = allPhrases.filter(p => !onCooldown.has(p));
-  return pool.length >= CARD_PHRASES ? pool : allPhrases;
+  const available = allPhrases.filter(p => !onCooldown.has(p));
+  return available.length >= CARD_PHRASES ? available : allPhrases;
 }
 
 function makeCard() {
-  const pool = getPool();
-  const shuffled = pool.slice().sort(() => Math.random() - 0.5);
+  const shuffled = getPhrasePool().slice().sort(() => Math.random() - 0.5);
   const picked = shuffled.slice(0, CARD_PHRASES);
   return [...picked.slice(0, FREE_INDEX), 'FREE', ...picked.slice(FREE_INDEX)];
 }
@@ -270,6 +331,7 @@ function hasBingo(marked) {
   return WIN_LINES.some(line => line.every(i => s.has(i)));
 }
 
+// "Hot" = one tile away from bingo on any line (drives the glow on player chips)
 function isOneAway(marked) {
   const s = new Set(marked);
   return WIN_LINES.some(line => line.filter(i => !s.has(i)).length === 1);
@@ -290,6 +352,10 @@ function broadcastPlayers() {
 function startNewGame() {
   gameCount++;
   game = { id: gameCount, active: true, winner: null };
+
+  // Prune cooldown log — anything older than the window will never matter again
+  recentLog = recentLog.filter(e => e.game > gameCount - COOLDOWN_GAMES);
+
   for (const [id, p] of Object.entries(players)) {
     p.card = makeCard();
     p.marked = [FREE_INDEX];
@@ -300,18 +366,34 @@ function startNewGame() {
   broadcastPlayers();
 }
 
+// Forget devices that haven't been seen in a while so the map can't grow forever
+setInterval(() => {
+  const cutoff = Date.now() - DEVICE_EXPIRY_MS;
+  for (const [deviceId, state] of Object.entries(devicePlayers)) {
+    if ((state.lastSeen || 0) < cutoff) delete devicePlayers[deviceId];
+  }
+}, 60 * 60 * 1000);
+
+// ── 7. Socket handlers ──
+
 io.on('connection', socket => {
-  socket.on('join', async ({ name, campus, deviceId }) => {
+  socket.on('join', async ({ name: rawName, campus, deviceId } = {}) => {
     if (players[socket.id]) return;
+
+    const name = cleanName(rawName);
+    if (!name || !isValidCampus(campus)) return;
 
     let state = deviceId ? devicePlayers[deviceId] : null;
 
     if (state) {
-      // Returning device — detach from any old socket and restore state
-      const oldSocket = Object.entries(players).find(([, p]) => p === state)?.[0];
-      if (oldSocket) delete players[oldSocket];
+      // Returning device — kick any old tab still holding this player, restore state
+      const oldSocketId = Object.entries(players).find(([, p]) => p === state)?.[0];
+      if (oldSocketId && oldSocketId !== socket.id) {
+        delete players[oldSocketId];
+        io.to(oldSocketId).emit('kicked');
+      }
 
-      // If the game has moved on since they left, give them a fresh card
+      // If the game moved on since they left, deal them a fresh card
       if (state.gameId !== game.id) {
         state.card   = makeCard();
         state.marked = [FREE_INDEX];
@@ -319,24 +401,36 @@ io.on('connection', socket => {
         state.hot    = false;
       }
     } else {
-      // Brand new player
       state = { name, campus, card: makeCard(), marked: [FREE_INDEX], gameId: game.id, hot: false, deviceId: deviceId || null };
       if (deviceId) devicePlayers[deviceId] = state;
     }
 
+    state.lastSeen = Date.now();
     players[socket.id] = state;
-    const scoreboard = await getScoreboard().catch(() => ({ list: [], weekendLeader: null, satLeader: null, sunLeader: null }));
-    socket.emit('joined', { card: state.card, marked: state.marked, gameId: state.gameId, winner: game.winner, scoreboard, name: state.name, popularTiles: getPopularTiles(), suspended });
+
+    const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
+    socket.emit('joined', {
+      card: state.card,
+      marked: state.marked,
+      gameId: state.gameId,
+      winner: game.winner,
+      scoreboard,
+      name: state.name,
+      popularTiles: getPopularTiles(),
+      suspended,
+    });
     broadcastPlayers();
   });
 
   socket.on('mark', async idx => {
     const p = players[socket.id];
-    if (!p || idx === FREE_INDEX || p.gameId !== game.id || !game.active || suspended) return;
+    if (!p || p.gameId !== game.id || !game.active || suspended) return;
+    if (!Number.isInteger(idx) || idx < 0 || idx >= CARD_SIZE || idx === FREE_INDEX) return;
     if (p.marked.includes(idx)) return;
-    p.marked.push(idx);
 
-    // Track phrase popularity
+    p.marked.push(idx);
+    p.lastSeen = Date.now();
+
     const phrase = p.card[idx];
     if (phrase && phrase !== 'FREE') {
       phraseCounts[phrase] = (phraseCounts[phrase] || 0) + 1;
@@ -352,13 +446,14 @@ io.on('connection', socket => {
       recentLog.push({ game: gameCount, phrases: p.card.filter(c => c !== 'FREE') });
 
       try { await recordWin(p.name, p.campus); } catch (err) { console.error('recordWin failed:', err); }
-      const scoreboard = await getScoreboard().catch(() => ({ list: [], weekendLeader: null, satLeader: null, sunLeader: null }));
+      const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
 
       io.emit('bingo', { winner: p.name, scoreboard, resetIn: AUTO_RESET_SECONDS, popularTiles: getPopularTiles() });
       setTimeout(startNewGame, AUTO_RESET_SECONDS * 1000);
     }
   });
 
+  // Explicit leave (logo tap) — forget the device so they can rejoin fresh
   socket.on('leave', () => {
     const p = players[socket.id];
     if (p?.deviceId) delete devicePlayers[p.deviceId];
@@ -366,8 +461,8 @@ io.on('connection', socket => {
     broadcastPlayers();
   });
 
+  // Disconnect (closed tab, lost signal) — keep device state so they can reconnect
   socket.on('disconnect', () => {
-    // Keep devicePlayers so they can reconnect to their card
     delete players[socket.id];
     broadcastPlayers();
   });

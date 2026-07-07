@@ -3,83 +3,109 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0c0c1e">
   <title>Admin — TCC Tech Bingo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0c0c1e;
+      --surface: #191936;
+      --line: rgba(155, 182, 191, 0.12);
+      --accent: #9BB6BF;
+      --accent-bright: #c6dde5;
+      --text: #eef0f6;
+      --muted: #8e90ad;
+    }
+
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #0f0f23;
-      color: #e8e8f0;
+      font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(1000px 600px at 85% -10%, rgba(155, 182, 191, 0.09), transparent 60%),
+        radial-gradient(900px 700px at -10% 100%, rgba(90, 110, 200, 0.10), transparent 60%),
+        var(--bg);
+      color: var(--text);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 20px;
+      -webkit-font-smoothing: antialiased;
     }
+
     .box {
-      background: #1c1c3a;
-      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(32, 32, 74, 0.9), rgba(25, 25, 54, 0.9));
+      border: 1px solid var(--line);
+      border-radius: 22px;
       padding: 40px 32px;
       max-width: 380px;
       width: 100%;
       display: flex;
       flex-direction: column;
       gap: 16px;
-      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
     }
-    h1 { font-size: 1.6rem; color: #9BB6BF; }
-    p  { color: #666; font-size: 0.9rem; line-height: 1.5; }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 900;
+      color: var(--accent);
+      text-shadow: 0 0 30px rgba(155, 182, 191, 0.35);
+    }
+    p { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+
     input[type="password"] {
       width: 100%;
-      padding: 13px 16px;
-      background: #0f0f23;
-      border: 2px solid #2a2a50;
-      border-radius: 10px;
-      color: #e8e8f0;
+      padding: 14px 16px;
+      background: rgba(12, 12, 30, 0.7);
+      border: 1.5px solid var(--line);
+      border-radius: 14px;
+      color: var(--text);
       font-size: 1rem;
+      font-family: inherit;
       outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    input[type="password"]:focus { border-color: #9BB6BF; }
-
-    .btn-row {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+    input[type="password"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(155, 182, 191, 0.15);
     }
 
     button {
       width: 100%;
-      padding: 13px;
+      padding: 14px;
       border: none;
-      border-radius: 10px;
+      border-radius: 14px;
       font-size: 1rem;
       font-weight: 700;
+      font-family: inherit;
       cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
+      transition: filter 0.15s, transform 0.12s;
     }
+    button:hover  { filter: brightness(1.1); }
     button:active { transform: scale(0.97); }
 
     #unlock-btn {
-      background: #9BB6BF;
-      color: #0f0f23;
+      background: linear-gradient(180deg, var(--accent-bright), var(--accent));
+      color: var(--bg);
+      box-shadow: 0 4px 18px rgba(155, 182, 191, 0.25);
     }
-    #unlock-btn:hover { background: #b3cdd5; }
 
     #suspend-btn {
-      background: #2a6099;
+      background: linear-gradient(180deg, #3a80c9, #2a6099);
       color: #fff;
     }
-    #suspend-btn:hover { background: #3a80c9; }
     #suspend-btn.active {
-      background: #4a9e6a;
+      background: linear-gradient(180deg, #5abf80, #4a9e6a);
     }
-    #suspend-btn.active:hover { background: #5abf80; }
 
     #reset-btn {
-      background: #c0392b;
+      background: linear-gradient(180deg, #e74c3c, #c0392b);
       color: #fff;
     }
-    #reset-btn:hover { background: #e74c3c; }
 
     #msg { font-size: 0.95rem; min-height: 1.4em; }
     #msg.success { color: #2ecc71; }
@@ -90,20 +116,17 @@
 
     .action-hint {
       font-size: 0.78rem;
-      color: #555;
+      color: var(--muted);
       text-align: center;
     }
-    .divider {
-      border-top: 1px solid #2a2a50;
-      margin: 4px 0;
-    }
+    .divider { border-top: 1px solid var(--line); margin: 4px 0; }
   </style>
 </head>
 <body>
   <div class="box">
     <h1>Admin</h1>
     <p id="intro-text">Enter the admin password to manage the game.</p>
-    <input type="password" id="pw" placeholder="Admin password">
+    <input type="password" id="pw" placeholder="Admin password" autocomplete="current-password">
     <button id="unlock-btn" onclick="doUnlock()">Unlock</button>
 
     <div id="actions">
@@ -120,110 +143,98 @@
 
     <div id="msg"></div>
   </div>
+
   <script>
-    let unlockedPw = '';
+    let adminPw = '';
     let isSuspended = false;
 
-    document.getElementById('pw').addEventListener('keydown', e => {
-      if (e.key === 'Enter') doUnlock();
-    });
+    const $ = id => document.getElementById(id);
+    const setMsg = (text, cls = '') => { $('msg').textContent = text; $('msg').className = cls; };
 
+    $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') doUnlock(); });
+
+    // Verify the password with the server before revealing any controls
     async function doUnlock() {
-      const pw = document.getElementById('pw').value;
-      const msg = document.getElementById('msg');
-      if (!pw) { msg.textContent = ''; return; }
-
-      // Quick check — try the suspend endpoint with a no-op read
-      const res = await fetch('/admin/status');
-      const data = await res.json();
-
-      // We'll verify password on the first real action; for now just reveal UI
-      // and store the password. We do a lightweight verify via a suspend no-op.
-      unlockedPw = pw;
-      isSuspended = data.suspended;
-
-      document.getElementById('pw').style.display = 'none';
-      document.getElementById('unlock-btn').style.display = 'none';
-      document.getElementById('intro-text').style.display = 'none';
-      document.getElementById('actions').classList.add('visible');
-      updateSuspendBtn();
-      msg.textContent = '';
+      const pw = $('pw').value;
+      if (!pw) return;
+      setMsg('Checking…');
+      try {
+        const res = await fetch('/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw })
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          setMsg('❌ ' + (data.error || 'Wrong password'), 'error');
+          return;
+        }
+        adminPw = pw;
+        isSuspended = data.suspended;
+        $('pw').style.display = 'none';
+        $('unlock-btn').style.display = 'none';
+        $('intro-text').style.display = 'none';
+        $('actions').classList.add('visible');
+        updateSuspendBtn();
+        setMsg('');
+      } catch {
+        setMsg('❌ Could not connect to server.', 'error');
+      }
     }
 
     function updateSuspendBtn() {
-      const btn = document.getElementById('suspend-btn');
-      const hint = document.getElementById('suspend-hint');
+      const btn = $('suspend-btn');
       if (isSuspended) {
         btn.textContent = '▶️ Resume Play';
         btn.classList.add('active');
-        hint.textContent = 'Resumes the game and hides the stats screen for all players.';
+        $('suspend-hint').textContent = 'Resumes the game and hides the stats screen for all players.';
       } else {
         btn.textContent = '📊 Show Stats Screen';
         btn.classList.remove('active');
-        hint.textContent = 'Pauses play and shows the leaderboard & most-marked tiles on all screens.';
+        $('suspend-hint').textContent = 'Pauses play and shows the leaderboard & most-marked tiles on all screens.';
       }
     }
 
     async function doSuspend() {
-      const msg = document.getElementById('msg');
-      msg.textContent = isSuspended ? 'Resuming…' : 'Suspending…';
-      msg.className = '';
+      setMsg(isSuspended ? 'Resuming…' : 'Suspending…');
       try {
         const res = await fetch('/admin/suspend', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: unlockedPw, active: isSuspended }) // active:true = resume
+          body: JSON.stringify({ password: adminPw, active: isSuspended }) // active:true = resume
         });
         const data = await res.json();
-        if (data.ok !== undefined) {
+        if (data.ok) {
           isSuspended = data.suspended;
           updateSuspendBtn();
-          msg.textContent = isSuspended ? '✅ Stats screen shown to all players.' : '✅ Play resumed.';
-          msg.className = 'success';
+          setMsg(isSuspended ? '✅ Stats screen shown to all players.' : '✅ Play resumed.', 'success');
         } else {
-          msg.textContent = '❌ ' + (data.error || 'Failed');
-          msg.className = 'error';
-          // Wrong password — go back to unlock screen
-          resetToLock();
+          setMsg('❌ ' + (data.error || 'Failed'), 'error');
         }
       } catch {
-        msg.textContent = '❌ Could not connect to server.';
-        msg.className = 'error';
+        setMsg('❌ Could not connect to server.', 'error');
       }
     }
 
     async function doReset() {
-      const msg = document.getElementById('msg');
-      msg.textContent = 'Resetting…';
-      msg.className = '';
+      setMsg('Resetting…');
       try {
         const res = await fetch('/admin/reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: unlockedPw })
+          body: JSON.stringify({ password: adminPw })
         });
         const data = await res.json();
         if (data.ok) {
-          msg.textContent = '✅ Scores reset! Everyone starts fresh.';
-          msg.className = 'success';
+          isSuspended = false;
+          updateSuspendBtn();
+          setMsg('✅ Scores reset! Everyone starts fresh.', 'success');
         } else {
-          msg.textContent = '❌ ' + data.error;
-          msg.className = 'error';
-          resetToLock();
+          setMsg('❌ ' + (data.error || 'Failed'), 'error');
         }
       } catch {
-        msg.textContent = '❌ Could not connect to server.';
-        msg.className = 'error';
+        setMsg('❌ Could not connect to server.', 'error');
       }
-    }
-
-    function resetToLock() {
-      unlockedPw = '';
-      document.getElementById('pw').value = '';
-      document.getElementById('pw').style.display = '';
-      document.getElementById('unlock-btn').style.display = '';
-      document.getElementById('intro-text').style.display = '';
-      document.getElementById('actions').classList.remove('visible');
     }
   </script>
 </body>
