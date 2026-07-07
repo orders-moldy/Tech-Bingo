@@ -13,6 +13,7 @@ Multiplayer buzzword bingo for live services. Players listen to the speaker and 
 - **Phrase rotation** — phrases from winning cards sit out for 3 games so cards stay fresh
 - **Most Marked tiles** — top 3 phrases appear in the sidebar after 4+ weekend wins
 - **Hot glow** — players one tile away from bingo pulse in the player list
+- **Live chat** — one shared room for all campuses (collapsible 💬 panel under the card; last 50 messages replay on join; in-memory only, so history clears when the server sleeps and on weekend reset)
 - **Device ID anti-cheat** — one game per device; opening a second tab signs out the first
 - **Auto reset** — 6-second countdown after a bingo, then new cards for everyone
 
@@ -23,8 +24,6 @@ Enter the admin password to unlock two controls:
 1. **📊 Show Stats Screen** — pauses play and pushes a full-screen leaderboard + most-marked-tiles summary to every player. Click again to resume.
 2. **🗑️ Reset Scores** — archives the weekend scoreboard and emails a summary (leaders, full list, most-marked tiles). Archived weekends stay visible in Win History.
 3. **📜 Win History** — all-time champions (total wins + weekend titles) and past weekend winners, accumulated across every weekend played.
-
-A live chat feature is specced but not built yet — see [CHAT-ROADMAP.md](CHAT-ROADMAP.md).
 
 ## Editing phrases
 

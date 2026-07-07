@@ -47,6 +47,12 @@ let game = { id: 0, active: true, winner: null };
 let phraseCounts = {};  // phrase -> times marked (drives "Most Marked")
 let suspended = false;  // admin paused play to show the stats screen
 
+// Chat — in-memory only; history is lost when the server sleeps (fine for a weekly event)
+const CHAT_HISTORY_MAX = 50;    // ring buffer sent to new joiners
+const CHAT_MSG_MAX_LENGTH = 200;
+const CHAT_COOLDOWN_MS = 1500;  // min gap between messages per player
+let chatHistory = [];           // [{ name, campus, text, ts }]
+
 // Reject anything a malicious client might sneak into a join payload.
 function cleanName(raw) {
   if (typeof raw !== 'string') return null;
@@ -303,6 +309,10 @@ app.post('/admin/reset', async (req, res) => {
       io.emit('resume');
     }
 
+    // Fresh weekend, fresh chat
+    chatHistory = [];
+    io.emit('chat_history', []);
+
     io.emit('scoreboard_update', { ...EMPTY_SCOREBOARD, popularTiles: [] });
     res.json({ ok: true });
   } catch (err) {
@@ -487,8 +497,25 @@ io.on('connection', socket => {
       name: state.name,
       popularTiles: getPopularTiles(),
       suspended,
+      chatHistory,
     });
     broadcastPlayers();
+  });
+
+  socket.on('chat', text => {
+    const p = players[socket.id];
+    if (!p || suspended) return;                       // must be joined; quiet during stats
+    if (typeof text !== 'string') return;
+    const clean = text.replace(/[<>]/g, '').trim().slice(0, CHAT_MSG_MAX_LENGTH);
+    if (!clean) return;
+    const now = Date.now();
+    if (p.lastChatAt && now - p.lastChatAt < CHAT_COOLDOWN_MS) return;  // rate limit
+    p.lastChatAt = now;
+
+    const msg = { name: p.name, campus: p.campus, text: clean, ts: now };
+    chatHistory.push(msg);
+    if (chatHistory.length > CHAT_HISTORY_MAX) chatHistory.shift();
+    io.emit('chat', msg);
   });
 
   socket.on('mark', async idx => {

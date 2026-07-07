@@ -91,6 +91,22 @@
         <div id="players-list"></div>
       </div>
 
+      <div id="chat-section">
+        <button id="chat-toggle" type="button">
+          <span>💬 Chat</span>
+          <span id="chat-unread" class="chat-unread hidden"></span>
+          <span id="chat-caret" class="chat-caret">▸</span>
+        </button>
+        <div id="chat-body" class="hidden">
+          <div id="chat-messages"></div>
+          <button id="chat-pill" class="chat-pill hidden" type="button">↓ New messages</button>
+          <div class="chat-input-row">
+            <input id="chat-input" type="text" maxlength="200" placeholder="Say something…" autocomplete="off">
+            <button id="chat-send" type="button">Send</button>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 

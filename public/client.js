@@ -8,6 +8,7 @@
 //    4. Card rendering & marking
 //    5. Scoreboard & stats overlay
 //    6. Confetti
+//    7. Chat
 // ─────────────────────────────────────────────────────────────
 
 const socket = io();
@@ -92,7 +93,7 @@ function showJoinScreen(message = '') {
 
 // ── 3. Socket events ──
 
-socket.on('joined', ({ card, marked, winner, scoreboard, name: canonicalName, popularTiles, suspended }) => {
+socket.on('joined', ({ card, marked, winner, scoreboard, name: canonicalName, popularTiles, suspended, chatHistory }) => {
   if (canonicalName) myName = canonicalName;
   myCard   = card;
   myMarked = new Set(marked);
@@ -100,6 +101,8 @@ socket.on('joined', ({ card, marked, winner, scoreboard, name: canonicalName, po
   gameScreen.classList.remove('hidden');
   renderCard();
   updateScoreboard({ ...scoreboard, popularTiles });
+  renderChat(chatHistory || []);
+  setChatEnabled(!suspended);
   if (winner) {
     winMsg.textContent = `${winner} got BINGO!`;
     winOverlay.classList.remove('hidden');
@@ -150,10 +153,12 @@ socket.on('scoreboard_update', updateScoreboard);
 
 socket.on('suspend', ({ scoreboard, popularTiles }) => {
   showStatsOverlay({ ...scoreboard, popularTiles });
+  setChatEnabled(false);
 });
 
 socket.on('resume', () => {
   statsOverlay.classList.add('hidden');
+  setChatEnabled(true);
 });
 
 // This device joined from another tab — this tab is no longer in the game
@@ -319,5 +324,106 @@ function fireConfetti(big) {
   if (big) {
     setTimeout(() => confetti({ particleCount: 80, angle: 60,  spread: 55, origin: { x: 0, y: 0.6 } }), 200);
     setTimeout(() => confetti({ particleCount: 80, angle: 120, spread: 55, origin: { x: 1, y: 0.6 } }), 350);
+  }
+}
+
+// ── 7. Chat ──
+
+const CHAT_DOM_MAX = 100;        // cap rendered messages
+const CHAT_SEND_COOLDOWN = 1500; // matches server rate limit
+
+const chatBody     = $('chat-body');
+const chatMessages = $('chat-messages');
+const chatInput    = $('chat-input');
+const chatSend     = $('chat-send');
+const chatUnread   = $('chat-unread');
+const chatPill     = $('chat-pill');
+
+let chatOpen = false;
+let unreadCount = 0;
+
+$('chat-toggle').addEventListener('click', () => {
+  chatOpen = !chatOpen;
+  chatBody.classList.toggle('hidden', !chatOpen);
+  $('chat-caret').textContent = chatOpen ? '▾' : '▸';
+  if (chatOpen) {
+    clearUnread();
+    scrollChatToBottom();
+  }
+});
+
+chatSend.addEventListener('click', sendChat);
+chatInput.addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+chatPill.addEventListener('click', () => { scrollChatToBottom(); chatPill.classList.add('hidden'); });
+
+// Hide the pill once the user scrolls back to the bottom themselves
+chatMessages.addEventListener('scroll', () => {
+  if (isChatNearBottom()) chatPill.classList.add('hidden');
+});
+
+socket.on('chat', msg => {
+  appendChatMessage(msg);
+  if (!chatOpen) {
+    unreadCount++;
+    chatUnread.textContent = unreadCount > 9 ? '9+' : unreadCount;
+    chatUnread.classList.remove('hidden');
+  }
+});
+
+socket.on('chat_history', renderChat);
+
+function sendChat() {
+  const text = chatInput.value.trim();
+  if (!text || chatSend.disabled) return;
+  socket.emit('chat', text);
+  chatInput.value = '';
+  // Brief cooldown matching the server's rate limit
+  chatSend.disabled = true;
+  setTimeout(() => { chatSend.disabled = false; }, CHAT_SEND_COOLDOWN);
+}
+
+function setChatEnabled(enabled) {
+  chatInput.disabled = !enabled;
+  chatInput.placeholder = enabled ? 'Say something…' : 'Chat paused during stats';
+}
+
+function clearUnread() {
+  unreadCount = 0;
+  chatUnread.classList.add('hidden');
+}
+
+function isChatNearBottom() {
+  return chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 40;
+}
+
+function scrollChatToBottom() {
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function chatRow(msg) {
+  const row = document.createElement('div');
+  row.className = 'chat-msg';
+  const mine = msg.name === myName;
+  row.innerHTML = `<span class="chat-name${mine ? ' me' : ''}">${esc(msg.name)}</span><span class="chat-text">${esc(msg.text)}</span>`;
+  return row;
+}
+
+function renderChat(list) {
+  chatMessages.innerHTML = '';
+  (list || []).slice(-CHAT_DOM_MAX).forEach(msg => chatMessages.appendChild(chatRow(msg)));
+  scrollChatToBottom();
+  clearUnread();
+}
+
+function appendChatMessage(msg) {
+  const wasNearBottom = isChatNearBottom();
+  chatMessages.appendChild(chatRow(msg));
+  while (chatMessages.children.length > CHAT_DOM_MAX) chatMessages.firstChild.remove();
+
+  // Don't yank the view down if the user scrolled up to read older messages
+  if (wasNearBottom || msg.name === myName) {
+    scrollChatToBottom();
+  } else if (chatOpen) {
+    chatPill.classList.remove('hidden');
   }
 }
