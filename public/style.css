@@ -628,6 +628,13 @@ header {
 
 .chat-name.me { color: var(--accent-bright); }
 
+.chat-time {
+  font-size: 0.66rem;
+  color: var(--muted);
+  margin-right: 7px;
+  white-space: nowrap;
+}
+
 .chat-text { color: var(--text); }
 
 .chat-pill {

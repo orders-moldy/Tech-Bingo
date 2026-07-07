@@ -266,6 +266,28 @@ app.post('/admin/login', (req, res) => {
   res.json({ ok: true, suspended });
 });
 
+// Snapshot for the admin dashboard: live counts + current weekend standings.
+app.post('/admin/overview', async (req, res) => {
+  if (!checkPassword(req.body.password)) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  try {
+    const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
+    res.json({
+      ok: true,
+      suspended,
+      playersOnline: Object.keys(players).length,
+      gamesThisSession: gameCount,
+      phraseCount: allPhrases.length,
+      scoreboard,
+      popularTiles: getPopularTiles(),
+    });
+  } catch (err) {
+    console.error('Overview failed:', err.message);
+    res.status(500).json({ error: 'Could not load overview' });
+  }
+});
+
 // Suspend pauses all marking and pushes the stats overlay to every player.
 // { active: true } resumes play, { active: false } suspends it.
 app.post('/admin/suspend', async (req, res) => {

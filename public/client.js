@@ -410,7 +410,10 @@ function chatRow(msg) {
   const row = document.createElement('div');
   row.className = 'chat-msg';
   const mine = msg.name === myName;
-  row.innerHTML = `<span class="chat-name${mine ? ' me' : ''}">${esc(msg.name)}</span><span class="chat-text">${esc(msg.text)}</span>`;
+  const time = msg.ts ? new Date(msg.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+  row.innerHTML = `<span class="chat-name${mine ? ' me' : ''}">${esc(msg.name)}</span>`
+    + (time ? `<span class="chat-time">${time}</span>` : '')
+    + `<span class="chat-text">${esc(msg.text)}</span>`;
   return row;
 }
 
