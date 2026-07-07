@@ -339,8 +339,14 @@ const chatSend     = $('chat-send');
 const chatUnread   = $('chat-unread');
 const chatPill     = $('chat-pill');
 
-let chatOpen = false;
+// Chat starts open on wide screens (it has its own column there); collapsed on small ones
+let chatOpen = window.matchMedia('(min-width: 981px)').matches;
 let unreadCount = 0;
+
+if (chatOpen) {
+  chatBody.classList.remove('hidden');
+  $('chat-caret').textContent = '▾';
+}
 
 $('chat-toggle').addEventListener('click', () => {
   chatOpen = !chatOpen;

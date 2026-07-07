@@ -883,7 +883,23 @@ header {
   font-style: italic;
 }
 
-/* ── 8. Mobile ── */
+/* ── 8. Responsive layouts ── */
+
+/* Wide desktop: chat gets its own column to the right of the card */
+@media (min-width: 981px) {
+  #content {
+    grid-template-columns: 195px 1fr 240px;
+    max-width: 1150px;
+  }
+  #chat-section {
+    grid-column: 3; grid-row: 2;
+    padding-top: 0;
+    align-self: start;
+    position: sticky;
+    top: 12px;
+  }
+  #chat-messages { height: 320px; }
+}
 
 /* Single column: letters, card, players, chat, then scoreboard */
 @media (max-width: 620px) {
