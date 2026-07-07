@@ -337,6 +337,13 @@
     .hist-weekend-winner { flex: 1; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .hist-weekend-wins { color: var(--accent); font-weight: 800; flex-shrink: 0; }
 
+    /* Weekend chat log */
+    #chat-log { max-height: 60vh; overflow-y: auto; }
+    .chatlog-row { padding: 8px 2px; border-top: 1px solid var(--line); font-size: 0.88rem; line-height: 1.45; overflow-wrap: break-word; }
+    .chatlog-row:first-of-type { border-top: none; }
+    .chatlog-name { font-weight: 800; color: var(--accent); margin-right: 7px; }
+    .chatlog-meta { font-size: 0.7rem; color: var(--muted); margin-right: 7px; white-space: nowrap; }
+
     #msg { font-size: 0.92rem; min-height: 1.4em; text-align: center; }
     #msg.success { color: #2ecc71; }
     #msg.error   { color: #e74c3c; }
@@ -386,6 +393,7 @@
     <nav class="tabs">
       <button class="tab active" data-tab="overview" onclick="showTab('overview')">Overview</button>
       <button class="tab" data-tab="history" onclick="showTab('history')">Win History</button>
+      <button class="tab" data-tab="chat" onclick="showTab('chat')">Chat</button>
     </nav>
 
     <section id="tab-overview">
@@ -434,6 +442,13 @@
       </div>
     </section>
 
+    <section id="tab-chat" class="hidden">
+      <div class="panel">
+        <div class="panel-title" id="chat-log-title">💬 Weekend Chat</div>
+        <div id="chat-log"><p class="empty">Loading…</p></div>
+      </div>
+    </section>
+
     <div id="msg"></div>
   </div>
 
@@ -452,6 +467,7 @@
     let adminPw = '';
     let isSuspended = false;
     let historyLoaded = false;
+    let chatLoaded = false;
 
     const $ = id => document.getElementById(id);
     const setMsg = (text, cls = '') => { $('msg').textContent = text; $('msg').className = cls; };
@@ -497,7 +513,9 @@
       document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
       $('tab-overview').classList.toggle('hidden', name !== 'overview');
       $('tab-history').classList.toggle('hidden', name !== 'history');
+      $('tab-chat').classList.toggle('hidden', name !== 'chat');
       if (name === 'history' && !historyLoaded) loadHistory();
+      if (name === 'chat' && !chatLoaded) loadChat();
     }
 
     // ── Overview ──
@@ -714,12 +732,47 @@
       }).join('') : '<p class="empty">No past weekends yet.</p>';
     }
 
+    // ── Weekend chat log ──
+
+    async function loadChat() {
+      try {
+        const data = await api('/admin/chat');
+        if (!data.ok) { setMsg('❌ ' + (data.error || 'Failed'), 'error'); return; }
+        chatLoaded = true;
+        renderChatLog(data.messages);
+      } catch {
+        setMsg('❌ Could not connect to server.', 'error');
+      }
+    }
+
+    function renderChatLog(messages) {
+      const el = $('chat-log');
+      $('chat-log-title').textContent = `💬 Weekend Chat (${messages.length}${messages.length === 1000 ? '+' : ''})`;
+      if (!messages.length) {
+        el.innerHTML = '<p class="empty">No chat messages yet this weekend.</p>';
+        return;
+      }
+      el.innerHTML = messages.map(m => {
+        const d = new Date(m.ts);
+        const when = d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' +
+                     d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        return `
+          <div class="chatlog-row">
+            <span class="chatlog-name">${esc(m.name)}</span>
+            <span class="chatlog-meta">${esc(m.campus)} · ${when}</span>
+            <span>${esc(m.text)}</span>
+          </div>`;
+      }).join('');
+      el.scrollTop = el.scrollHeight; // newest messages at the bottom
+    }
+
     // ── Actions ──
 
     async function refreshAll() {
       setMsg('Refreshing…');
       await refreshOverview();
       if (historyLoaded) await loadHistory();
+      if (chatLoaded) await loadChat();
       setMsg('');
     }
 
@@ -745,6 +798,7 @@
         const data = await api('/admin/reset');
         if (data.ok) {
           historyLoaded = false; // stale — refetches next time the tab opens
+          chatLoaded = false;    // chat log was wiped with the reset
           await refreshOverview();
           setMsg('✅ Scores reset! Everyone starts fresh.', 'success');
         } else {

@@ -51,7 +51,9 @@ let suspended = false;  // admin paused play to show the stats screen
 const CHAT_HISTORY_MAX = 50;    // ring buffer sent to new joiners
 const CHAT_MSG_MAX_LENGTH = 200;
 const CHAT_COOLDOWN_MS = 1500;  // min gap between messages per player
+const CHAT_LOG_MAX = 2000;      // memory-mode cap for the full weekend log
 let chatHistory = [];           // [{ name, campus, text, ts }]
+let memChatLog = [];            // full weekend log fallback when no DB
 
 // Reject anything a malicious client might sneak into a join payload.
 function cleanName(raw) {
@@ -95,6 +97,16 @@ async function initDB() {
   `);
   // Older deploys predate the archive flag — add it if missing
   await pool.query(`ALTER TABLE wins ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE`);
+  // Weekend chat log for the admin dashboard (wiped at reset)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      campus TEXT NOT NULL,
+      text TEXT NOT NULL,
+      ts BIGINT NOT NULL
+    )
+  `);
   console.log('Database connected ✓');
 }
 
@@ -316,6 +328,28 @@ app.post('/admin/players', async (req, res) => {
   }
 });
 
+// Full chat log for the current weekend (admin dashboard). Cleared at reset.
+app.post('/admin/chat', async (req, res) => {
+  if (!checkPassword(req.body.password)) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  try {
+    let messages;
+    if (pool) {
+      const result = await pool.query(
+        'SELECT name, campus, text, ts FROM chat_messages ORDER BY ts DESC LIMIT 1000'
+      );
+      messages = result.rows.map(r => ({ ...r, ts: Number(r.ts) })).reverse();
+    } else {
+      messages = memChatLog;
+    }
+    res.json({ ok: true, messages });
+  } catch (err) {
+    console.error('Chat log failed:', err.message);
+    res.status(500).json({ error: 'Could not load chat log' });
+  }
+});
+
 // Suspend pauses all marking and pushes the stats overlay to every player.
 // { active: true } resumes play, { active: false } suspends it.
 app.post('/admin/suspend', async (req, res) => {
@@ -359,8 +393,10 @@ app.post('/admin/reset', async (req, res) => {
       io.emit('resume');
     }
 
-    // Fresh weekend, fresh chat
+    // Fresh weekend, fresh chat — the archived log disappears with the reset
     chatHistory = [];
+    memChatLog = [];
+    if (pool) await pool.query('DELETE FROM chat_messages');
     io.emit('chat_history', []);
 
     io.emit('scoreboard_update', { ...EMPTY_SCOREBOARD, popularTiles: [] });
@@ -567,6 +603,17 @@ io.on('connection', socket => {
     const msg = { name: p.name, campus: p.campus, text: clean, ts: now };
     chatHistory.push(msg);
     if (chatHistory.length > CHAT_HISTORY_MAX) chatHistory.shift();
+
+    // Persist the full weekend log for the admin dashboard (best-effort)
+    if (pool) {
+      pool.query('INSERT INTO chat_messages (name, campus, text, ts) VALUES ($1, $2, $3, $4)',
+        [msg.name, msg.campus, msg.text, msg.ts])
+        .catch(err => console.error('chat save failed:', err.message));
+    } else {
+      memChatLog.push(msg);
+      if (memChatLog.length > CHAT_LOG_MAX) memChatLog.shift();
+    }
+
     io.emit('chat', msg);
   });
 
