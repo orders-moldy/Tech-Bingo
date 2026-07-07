@@ -24,20 +24,14 @@ Enter the admin password to unlock two controls:
 1. **📊 Show Stats Screen** — pauses play and pushes a full-screen leaderboard + most-marked-tiles summary to every player. Click again to resume.
 2. **🗑️ Reset Scores** — archives the weekend scoreboard and emails a summary (leaders, full list, most-marked tiles). Archived weekends stay visible in Win History.
 3. **📜 Win History** — all-time champions (total wins + weekend titles) and past weekend winners, accumulated across every weekend played.
+4. **💬 Chat** — the full weekend chat log (deleted at reset).
+5. **🧩 Phrases** — add, edit, or remove the phrases that feed the bingo tiles.
 
 ## Editing phrases
 
-Edit **`phrases.json`** — a plain list of strings. Keep 30+ so cards vary (the game picks 24 per card). Watch for a trailing comma after the last phrase — that breaks the deploy.
+Use the **Phrases tab in the admin dashboard** (`/admin.html`) — add, edit, or remove phrases right from the browser. Changes are stored in the database, survive restarts, and apply to cards dealt after the next bingo. The editor won't let the list drop below 24 (a full card).
 
-After editing:
-
-```bash
-git add phrases.json
-git commit -m "Update phrases"
-git push
-```
-
-Render redeploys automatically on push.
+`phrases.json` is only the seed for the very first boot (or the fallback when no database is configured). Keep 30+ phrases so cards vary.
 
 ## Environment variables (set in Render)
 

@@ -344,6 +344,36 @@
     .chatlog-name { font-weight: 800; color: var(--accent); margin-right: 7px; }
     .chatlog-meta { font-size: 0.7rem; color: var(--muted); margin-right: 7px; white-space: nowrap; }
 
+    /* Phrase editor */
+    .phr-note { font-size: 0.76rem; color: var(--muted); margin: -4px 0 12px; line-height: 1.5; }
+    .phr-add { display: flex; gap: 8px; margin-bottom: 10px; }
+    .phr-add input { flex: 1; padding: 10px 14px; font-size: 0.9rem; }
+    .phr-add button {
+      padding: 10px 18px;
+      background: linear-gradient(180deg, var(--accent-bright), var(--accent));
+      color: var(--on-accent);
+      flex-shrink: 0;
+    }
+    #phr-filter { padding: 9px 14px; font-size: 0.85rem; margin-bottom: 8px; }
+    #phr-list { max-height: 55vh; overflow-y: auto; }
+    .phr-row { display: flex; align-items: center; gap: 8px; padding: 7px 2px; border-top: 1px solid var(--line); }
+    .phr-row:first-of-type { border-top: none; }
+    .phr-text { flex: 1; min-width: 0; font-size: 0.88rem; overflow-wrap: break-word; }
+    .phr-row input { flex: 1; padding: 7px 12px; font-size: 0.88rem; }
+    .icon-btn {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      background: rgba(12, 12, 30, 0.7);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.8rem;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .icon-btn:hover { color: var(--accent); border-color: var(--accent); filter: none; }
+    .icon-btn.danger:hover { color: #e74c3c; border-color: #e74c3c; }
+    .icon-btn.save { color: #2ecc71; }
+
     #msg { font-size: 0.92rem; min-height: 1.4em; text-align: center; }
     #msg.success { color: #2ecc71; }
     #msg.error   { color: #e74c3c; }
@@ -394,6 +424,7 @@
       <button class="tab active" data-tab="overview" onclick="showTab('overview')">Overview</button>
       <button class="tab" data-tab="history" onclick="showTab('history')">Win History</button>
       <button class="tab" data-tab="chat" onclick="showTab('chat')">Chat</button>
+      <button class="tab" data-tab="phrases" onclick="showTab('phrases')">Phrases</button>
     </nav>
 
     <section id="tab-overview">
@@ -449,6 +480,19 @@
       </div>
     </section>
 
+    <section id="tab-phrases" class="hidden">
+      <div class="panel">
+        <div class="panel-title" id="phrases-title">🧩 Phrases</div>
+        <p class="phr-note">These feed the bingo tiles. Changes apply to cards dealt after the next bingo.</p>
+        <div class="phr-add">
+          <input type="text" id="phr-new" maxlength="60" placeholder="Add a new phrase…">
+          <button id="phr-add-btn" onclick="addPhrase()">Add</button>
+        </div>
+        <input type="text" id="phr-filter" placeholder="🔍 Filter phrases…" oninput="renderPhrases()">
+        <div id="phr-list"><p class="empty">Loading…</p></div>
+      </div>
+    </section>
+
     <div id="msg"></div>
   </div>
 
@@ -468,6 +512,8 @@
     let isSuspended = false;
     let historyLoaded = false;
     let chatLoaded = false;
+    let phrasesCache = null;   // current phrase list, null until first load
+    let editingPhrase = null;  // phrase currently in inline-edit mode
 
     const $ = id => document.getElementById(id);
     const setMsg = (text, cls = '') => { $('msg').textContent = text; $('msg').className = cls; };
@@ -514,8 +560,10 @@
       $('tab-overview').classList.toggle('hidden', name !== 'overview');
       $('tab-history').classList.toggle('hidden', name !== 'history');
       $('tab-chat').classList.toggle('hidden', name !== 'chat');
+      $('tab-phrases').classList.toggle('hidden', name !== 'phrases');
       if (name === 'history' && !historyLoaded) loadHistory();
       if (name === 'chat' && !chatLoaded) loadChat();
+      if (name === 'phrases' && phrasesCache === null) loadPhrases();
     }
 
     // ── Overview ──
@@ -766,6 +814,94 @@
       el.scrollTop = el.scrollHeight; // newest messages at the bottom
     }
 
+    // ── Phrase editor ──
+
+    async function loadPhrases() {
+      await phraseAction({ action: 'list' });
+    }
+
+    // Runs any phrase action and re-renders from the returned list
+    async function phraseAction(body) {
+      try {
+        const data = await api('/admin/phrases', body);
+        if (!data.ok) { setMsg('❌ ' + (data.error || 'Failed'), 'error'); return false; }
+        phrasesCache = data.phrases;
+        editingPhrase = null;
+        $('stat-phrases').textContent = data.phrases.length; // keep the stat card in sync
+        renderPhrases();
+        setMsg('');
+        return true;
+      } catch {
+        setMsg('❌ Could not connect to server.', 'error');
+        return false;
+      }
+    }
+
+    function renderPhrases() {
+      if (phrasesCache === null) return;
+      $('phrases-title').textContent = `🧩 Phrases (${phrasesCache.length})`;
+      const filter = $('phr-filter').value.trim().toLowerCase();
+      const shown = [...phrasesCache]
+        .sort((a, b) => a.localeCompare(b))
+        .filter(p => !filter || p.toLowerCase().includes(filter));
+
+      $('phr-list').innerHTML = shown.length ? shown.map(p => {
+        if (p === editingPhrase) {
+          return `
+            <div class="phr-row">
+              <input type="text" id="phr-edit-input" maxlength="60" value="${esc(p)}"
+                     onkeydown="if (event.key === 'Enter') saveEdit(); if (event.key === 'Escape') cancelEdit();">
+              <button class="icon-btn save" title="Save" onclick="saveEdit()">✓</button>
+              <button class="icon-btn" title="Cancel" onclick="cancelEdit()">✕</button>
+            </div>`;
+        }
+        return `
+          <div class="phr-row">
+            <span class="phr-text">${esc(p)}</span>
+            <button class="icon-btn" title="Edit" onclick="startEdit(this)" data-phrase="${esc(p)}">✎</button>
+            <button class="icon-btn danger" title="Remove" onclick="removePhrase(this)" data-phrase="${esc(p)}">✕</button>
+          </div>`;
+      }).join('') : '<p class="empty">No phrases match that filter.</p>';
+
+      const editInput = $('phr-edit-input');
+      if (editInput) { editInput.focus(); editInput.select(); }
+    }
+
+    async function addPhrase() {
+      const text = $('phr-new').value.trim();
+      if (!text) { $('phr-new').focus(); return; }
+      if (await phraseAction({ action: 'add', text })) {
+        $('phr-new').value = '';
+        setMsg('✅ Phrase added.', 'success');
+      }
+    }
+    $('phr-new').addEventListener('keydown', e => { if (e.key === 'Enter') addPhrase(); });
+
+    function startEdit(btn) {
+      editingPhrase = btn.dataset.phrase;
+      renderPhrases();
+    }
+
+    function cancelEdit() {
+      editingPhrase = null;
+      renderPhrases();
+    }
+
+    async function saveEdit() {
+      const text = $('phr-edit-input').value.trim();
+      const oldText = editingPhrase;
+      if (!text || text === oldText) { cancelEdit(); return; }
+      if (await phraseAction({ action: 'edit', oldText, text })) {
+        setMsg('✅ Phrase updated.', 'success');
+      }
+    }
+
+    async function removePhrase(btn) {
+      if (await phraseAction({ action: 'remove', text: btn.dataset.phrase })) {
+        setMsg('✅ Phrase removed.', 'success');
+      }
+    }
+
     // ── Actions ──
 
     async function refreshAll() {
@@ -773,6 +909,7 @@
       await refreshOverview();
       if (historyLoaded) await loadHistory();
       if (chatLoaded) await loadChat();
+      if (phrasesCache !== null) await loadPhrases();
       setMsg('');
     }
 

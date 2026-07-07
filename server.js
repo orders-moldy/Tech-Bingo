@@ -37,7 +37,9 @@ const SUMMARY_EMAIL_TO = 'mbeacom@ampliosystems.com';
 
 const CAMPUSES = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
 
-const allPhrases = JSON.parse(fs.readFileSync('phrases.json', 'utf8'));
+// Seed list; once a database is connected the DB copy becomes the source of
+// truth (editable from the admin dashboard) and this file is only the seed.
+let allPhrases = JSON.parse(fs.readFileSync('phrases.json', 'utf8'));
 
 let gameCount = 0;
 let recentLog = [];     // [{ game, phrases }] — winning cards, for phrase cooldown
@@ -107,6 +109,23 @@ async function initDB() {
       ts BIGINT NOT NULL
     )
   `);
+  // Editable phrase list — seeded from phrases.json the first time, then the
+  // DB copy is the source of truth so admin edits survive restarts/deploys
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS phrases (
+      id SERIAL PRIMARY KEY,
+      text TEXT UNIQUE NOT NULL
+    )
+  `);
+  const { rows } = await pool.query('SELECT text FROM phrases ORDER BY id');
+  if (rows.length === 0) {
+    for (const p of allPhrases) {
+      await pool.query('INSERT INTO phrases (text) VALUES ($1) ON CONFLICT DO NOTHING', [p]);
+    }
+    console.log(`Seeded ${allPhrases.length} phrases into the database`);
+  } else {
+    allPhrases = rows.map(r => r.text);
+  }
   console.log('Database connected ✓');
 }
 
@@ -347,6 +366,69 @@ app.post('/admin/chat', async (req, res) => {
   } catch (err) {
     console.error('Chat log failed:', err.message);
     res.status(500).json({ error: 'Could not load chat log' });
+  }
+});
+
+// Phrase list editor. Actions: list / add / edit / remove.
+// Changes apply to cards dealt from the next game onward.
+
+const MAX_PHRASE_LENGTH = 60;
+
+function cleanPhrase(raw) {
+  if (typeof raw !== 'string') return null;
+  const text = raw.replace(/[<>]/g, '').trim().slice(0, MAX_PHRASE_LENGTH);
+  return text.length ? text : null;
+}
+
+// Local fallback when no database — keeps phrases.json in sync so edits
+// persist across restarts in local development
+function savePhrasesToFile() {
+  try {
+    fs.writeFileSync('phrases.json', JSON.stringify(allPhrases, null, 2) + '\n');
+  } catch (err) {
+    console.error('Could not write phrases.json:', err.message);
+  }
+}
+
+app.post('/admin/phrases', async (req, res) => {
+  if (!checkPassword(req.body.password)) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  const { action } = req.body;
+  const fail = msg => res.status(400).json({ error: msg });
+  try {
+    if (action === 'add') {
+      const text = cleanPhrase(req.body.text);
+      if (!text) return fail('Phrase cannot be empty');
+      if (allPhrases.some(p => p.toLowerCase() === text.toLowerCase())) return fail('That phrase already exists');
+      allPhrases.push(text);
+      if (pool) await pool.query('INSERT INTO phrases (text) VALUES ($1) ON CONFLICT DO NOTHING', [text]);
+      else savePhrasesToFile();
+
+    } else if (action === 'edit') {
+      const { oldText } = req.body;
+      const text = cleanPhrase(req.body.text);
+      const idx = allPhrases.indexOf(oldText);
+      if (idx === -1) return fail('Original phrase not found — refresh and try again');
+      if (!text) return fail('Phrase cannot be empty');
+      if (allPhrases.some((p, i) => i !== idx && p.toLowerCase() === text.toLowerCase())) return fail('That phrase already exists');
+      allPhrases[idx] = text;
+      if (pool) await pool.query('UPDATE phrases SET text = $1 WHERE text = $2', [text, oldText]);
+      else savePhrasesToFile();
+
+    } else if (action === 'remove') {
+      const idx = allPhrases.indexOf(req.body.text);
+      if (idx === -1) return fail('Phrase not found — refresh and try again');
+      if (allPhrases.length <= CARD_PHRASES) return fail(`Can't go below ${CARD_PHRASES} phrases — a card needs ${CARD_PHRASES}`);
+      allPhrases.splice(idx, 1);
+      if (pool) await pool.query('DELETE FROM phrases WHERE text = $1', [req.body.text]);
+      else savePhrasesToFile();
+    }
+    // 'list' (and every successful action) returns the current list
+    res.json({ ok: true, phrases: allPhrases, min: CARD_PHRASES });
+  } catch (err) {
+    console.error('Phrases failed:', err.message);
+    res.status(500).json({ error: 'Phrase update failed' });
   }
 });
 
