@@ -175,6 +175,8 @@ function renderCard() {
   myCard.forEach((phrase, i) => {
     const cell = document.createElement('div');
     cell.className = 'cell';
+    // Size text to fit: short phrases display larger, long ones tighter
+    cell.classList.add(phrase.length <= 20 ? 'len-s' : phrase.length <= 34 ? 'len-m' : 'len-l');
     if (myMarked.has(i)) cell.classList.add('marked');
     if (phrase === 'FREE') cell.classList.add('free');
     cell.textContent = phrase;

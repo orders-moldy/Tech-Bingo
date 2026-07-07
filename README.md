@@ -21,7 +21,10 @@ Multiplayer buzzword bingo for live services. Players listen to the speaker and 
 Enter the admin password to unlock two controls:
 
 1. **📊 Show Stats Screen** — pauses play and pushes a full-screen leaderboard + most-marked-tiles summary to every player. Click again to resume.
-2. **🗑️ Reset Scores** — clears the weekend scoreboard and emails a summary (leaders, full list, most-marked tiles).
+2. **🗑️ Reset Scores** — archives the weekend scoreboard and emails a summary (leaders, full list, most-marked tiles). Archived weekends stay visible in Win History.
+3. **📜 Win History** — all-time champions (total wins + weekend titles) and past weekend winners, accumulated across every weekend played.
+
+A live chat feature is specced but not built yet — see [CHAT-ROADMAP.md](CHAT-ROADMAP.md).
 
 ## Editing phrases
 

@@ -61,7 +61,8 @@ function isValidCampus(campus) {
 // ── 2. Database (falls back to in-memory if no DATABASE_URL) ──
 
 let pool = null;
-let memScores = {}; // "name|campus|day" -> { name, campus, day, wins }
+let memScores = {};  // "name|campus|day" -> { name, campus, day, weekendStart, wins }
+let memArchive = []; // past-weekend rows moved here on reset (memory mode only)
 
 if (process.env.DATABASE_URL) {
   const { Pool } = require('pg');
@@ -86,6 +87,8 @@ async function initDB() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
+  // Older deploys predate the archive flag — add it if missing
+  await pool.query(`ALTER TABLE wins ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE`);
   console.log('Database connected ✓');
 }
 
@@ -119,7 +122,7 @@ async function recordWin(name, campus) {
     );
   } else {
     const key = `${name}|${campus}|${day}`;
-    if (!memScores[key]) memScores[key] = { name, campus, day, wins: 0 };
+    if (!memScores[key]) memScores[key] = { name, campus, day, weekendStart, wins: 0 };
     memScores[key].wins++;
   }
 }
@@ -133,7 +136,7 @@ async function getScoreboard() {
     const { weekendStart } = getWeekendInfo();
     const result = await pool.query(
       `SELECT name, campus, day, COUNT(*) AS wins
-       FROM wins WHERE weekend_start = $1
+       FROM wins WHERE weekend_start = $1 AND archived = FALSE
        GROUP BY name, campus, day`,
       [weekendStart]
     );
@@ -283,8 +286,13 @@ app.post('/admin/reset', async (req, res) => {
     const scoreboard = await getScoreboard();
     const popularTiles = getPopularTiles();
 
-    if (pool) await pool.query('DELETE FROM wins');
-    else memScores = {};
+    // Archive rather than delete — wins stay queryable for the history view
+    if (pool) {
+      await pool.query('UPDATE wins SET archived = TRUE WHERE archived = FALSE');
+    } else {
+      memArchive.push(...Object.values(memScores));
+      memScores = {};
+    }
     phraseCounts = {};
 
     sendSummaryEmail(scoreboard, popularTiles).catch(err => console.error('Email failed:', err.message));
@@ -300,6 +308,67 @@ app.post('/admin/reset', async (req, res) => {
   } catch (err) {
     console.error('Reset failed:', err.message);
     res.status(500).json({ error: 'Reset failed' });
+  }
+});
+
+// All-time win history (archived + current), grouped by weekend.
+// Powers the admin history view so repeat winners show up across weekends.
+async function getHistory() {
+  let rows = [];
+
+  if (pool) {
+    const result = await pool.query(
+      `SELECT name, campus, weekend_start, COUNT(*)::int AS wins
+       FROM wins GROUP BY name, campus, weekend_start`
+    );
+    rows = result.rows;
+  } else {
+    rows = [...memArchive, ...Object.values(memScores)].map(r => ({
+      name: r.name, campus: r.campus, weekend_start: r.weekendStart || 'unknown', wins: r.wins,
+    }));
+  }
+
+  // Group per weekend, combining a player's Saturday + Sunday wins
+  const byWeekend = {};
+  for (const row of rows) {
+    const wk = byWeekend[row.weekend_start] ??= {};
+    const key = `${row.name}|${row.campus}`;
+    if (!wk[key]) wk[key] = { name: row.name, campus: row.campus, wins: 0 };
+    wk[key].wins += row.wins;
+  }
+
+  const weekends = Object.entries(byWeekend)
+    .sort((a, b) => b[0].localeCompare(a[0])) // newest first
+    .map(([weekendStart, playerMap]) => ({
+      weekendStart,
+      players: Object.values(playerMap).sort((a, b) => b.wins - a.wins),
+    }));
+
+  // All-time totals + championship count (most wins in a weekend = 1 title)
+  const allTimeMap = {};
+  for (const wk of weekends) {
+    const topWins = wk.players[0]?.wins || 0;
+    for (const p of wk.players) {
+      const key = `${p.name}|${p.campus}`;
+      if (!allTimeMap[key]) allTimeMap[key] = { name: p.name, campus: p.campus, wins: 0, titles: 0 };
+      allTimeMap[key].wins += p.wins;
+      if (p.wins === topWins) allTimeMap[key].titles++;
+    }
+  }
+  const allTime = Object.values(allTimeMap).sort((a, b) => b.wins - a.wins || b.titles - a.titles);
+
+  return { weekends, allTime };
+}
+
+app.post('/admin/history', async (req, res) => {
+  if (!checkPassword(req.body.password)) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  try {
+    res.json({ ok: true, ...await getHistory() });
+  } catch (err) {
+    console.error('History failed:', err.message);
+    res.status(500).json({ error: 'Could not load history' });
   }
 });
 
