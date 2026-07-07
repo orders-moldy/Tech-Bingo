@@ -39,6 +39,12 @@ function getDeviceId() {
   return id;
 }
 
+// Rough device class, shown to admins in the player list
+function getDeviceType() {
+  const mobile = navigator.userAgentData?.mobile ?? /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  return mobile ? 'mobile' : 'desktop';
+}
+
 const joinScreen  = $('join-screen');
 const gameScreen  = $('game-screen');
 const winOverlay  = $('win-overlay');
@@ -70,7 +76,7 @@ function doJoin() {
   myCampus = campus;
   joinMsg.textContent = '';
   $('join-btn').disabled = true;
-  socket.emit('join', { name, campus, deviceId: getDeviceId() });
+  socket.emit('join', { name, campus, deviceId: getDeviceId(), deviceType: getDeviceType() });
 }
 
 // Tap the logo to return to the join screen (also forgets this device on the server)
@@ -169,7 +175,7 @@ socket.on('kicked', () => {
 // Auto-rejoin after a dropped connection (server sleep, lost wifi)
 socket.on('connect', () => {
   if (myName) {
-    socket.emit('join', { name: myName, campus: myCampus, deviceId: getDeviceId() });
+    socket.emit('join', { name: myName, campus: myCampus, deviceId: getDeviceId(), deviceType: getDeviceType() });
   }
 });
 

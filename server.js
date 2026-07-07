@@ -32,7 +32,7 @@ const CARD_PHRASES = 24;          // phrases per card (24 + FREE)
 const COOLDOWN_GAMES = 3;         // games before a winning card's phrases can reappear
 const AUTO_RESET_SECONDS = 6;     // countdown after a bingo before new cards deal
 const MAX_NAME_LENGTH = 20;
-const DEVICE_EXPIRY_MS = 12 * 60 * 60 * 1000; // forget devices not seen for 12h
+const DEVICE_EXPIRY_MS = 24 * 60 * 60 * 1000; // forget devices not seen for 24h (feeds the admin "recently active" list)
 const SUMMARY_EMAIL_TO = 'mbeacom@ampliosystems.com';
 
 const CAMPUSES = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
@@ -288,6 +288,34 @@ app.post('/admin/overview', async (req, res) => {
   }
 });
 
+// Player roster for the admin dashboard: who's connected right now, plus
+// devices seen in the last 24h. Both carry weekend win counts and device type.
+app.post('/admin/players', async (req, res) => {
+  if (!checkPassword(req.body.password)) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  try {
+    const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
+    const winsFor = (name, campus) =>
+      scoreboard.list.find(p => p.name === name && p.campus === campus)?.total || 0;
+    const info = p => ({ name: p.name, campus: p.campus, device: p.device || null, wins: winsFor(p.name, p.campus), lastSeen: p.lastSeen || null });
+
+    const activeStates = new Set(Object.values(players));
+    const active = [...activeStates].map(info);
+
+    const cutoff = Date.now() - DEVICE_EXPIRY_MS;
+    const recent = Object.values(devicePlayers)
+      .filter(p => !activeStates.has(p) && (p.lastSeen || 0) >= cutoff)
+      .sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))
+      .map(info);
+
+    res.json({ ok: true, active, recent });
+  } catch (err) {
+    console.error('Players failed:', err.message);
+    res.status(500).json({ error: 'Could not load players' });
+  }
+});
+
 // Suspend pauses all marking and pushes the stats overlay to every player.
 // { active: true } resumes play, { active: false } suspends it.
 app.post('/admin/suspend', async (req, res) => {
@@ -478,11 +506,12 @@ setInterval(() => {
 // ── 7. Socket handlers ──
 
 io.on('connection', socket => {
-  socket.on('join', async ({ name: rawName, campus, deviceId } = {}) => {
+  socket.on('join', async ({ name: rawName, campus, deviceId, deviceType } = {}) => {
     if (players[socket.id]) return;
 
     const name = cleanName(rawName);
     if (!name || !isValidCampus(campus)) return;
+    const device = ['mobile', 'desktop'].includes(deviceType) ? deviceType : null;
 
     let state = deviceId ? devicePlayers[deviceId] : null;
 
@@ -506,6 +535,7 @@ io.on('connection', socket => {
       if (deviceId) devicePlayers[deviceId] = state;
     }
 
+    if (device) state.device = device;
     state.lastSeen = Date.now();
     players[socket.id] = state;
 
