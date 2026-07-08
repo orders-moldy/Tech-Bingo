@@ -99,7 +99,7 @@ function showJoinScreen(message = '') {
 
 // ── 3. Socket events ──
 
-socket.on('joined', ({ card, marked, winner, scoreboard, name: canonicalName, popularTiles, suspended, chatHistory }) => {
+socket.on('joined', ({ card, marked, winner, winnerDeviceId, scoreboard, name: canonicalName, popularTiles, suspended, chatHistory }) => {
   if (canonicalName) myName = canonicalName;
   myCard   = card;
   myMarked = new Set(marked);
@@ -110,7 +110,8 @@ socket.on('joined', ({ card, marked, winner, scoreboard, name: canonicalName, po
   renderChat(chatHistory || []);
   setChatEnabled(!suspended);
   if (winner) {
-    winMsg.textContent = `${winner} got BINGO!`;
+    const isMe = winnerDeviceId && winnerDeviceId === getDeviceId();
+    winMsg.textContent = isMe ? '🎉 You got BINGO!' : `${winner} got BINGO!`;
     winOverlay.classList.remove('hidden');
   }
   if (suspended) showStatsOverlay({ ...scoreboard, popularTiles });
@@ -130,7 +131,8 @@ socket.on('players', players => {
         <div class="campus-name">${esc(c)}</div>
         <div class="campus-chips">
           ${groups[c].map(p => {
-            const classes = ['player-chip', p.name === myName ? 'me' : '', p.hot ? 'hot' : ''].filter(Boolean).join(' ');
+            const isMe = p.name === myName && p.campus === myCampus;
+            const classes = ['player-chip', isMe ? 'me' : '', p.hot ? 'hot' : ''].filter(Boolean).join(' ');
             return `<span class="${classes}">${esc(p.name)}</span>`;
           }).join('')}
         </div>
@@ -138,8 +140,9 @@ socket.on('players', players => {
     `).join('');
 });
 
-socket.on('bingo', ({ winner, scoreboard, resetIn, popularTiles }) => {
-  const isMe = winner === myName;
+socket.on('bingo', ({ winner, winnerDeviceId, scoreboard, resetIn, popularTiles }) => {
+  // Match the winner by device ID so two players sharing a name never both celebrate
+  const isMe = winnerDeviceId ? winnerDeviceId === getDeviceId() : winner === myName;
   winMsg.textContent = isMe ? '🎉 You got BINGO!' : `${winner} got BINGO!`;
   winOverlay.classList.remove('hidden');
   updateScoreboard({ ...scoreboard, popularTiles });

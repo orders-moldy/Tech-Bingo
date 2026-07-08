@@ -684,7 +684,8 @@ io.on('connection', socket => {
       card: state.card,
       marked: state.marked,
       gameId: state.gameId,
-      winner: game.winner,
+      winner: game.winner?.name || null,
+      winnerDeviceId: game.winner?.deviceId || null,
       scoreboard,
       name: state.name,
       popularTiles: getPopularTiles(),
@@ -740,14 +741,16 @@ io.on('connection', socket => {
     if (p.hot !== wasHot) broadcastPlayers();
 
     if (hasBingo(p.marked) && !game.winner) {
-      game.winner = p.name;
+      // Winner is identified by device, not just name — two players who
+      // happen to share a name never both see "You got BINGO!"
+      game.winner = { name: p.name, deviceId: p.deviceId || null };
       game.active = false;
       recentLog.push({ game: gameCount, phrases: p.card.filter(c => c !== 'FREE') });
 
       try { await recordWin(p); } catch (err) { console.error('recordWin failed:', err); }
       const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
 
-      io.emit('bingo', { winner: p.name, scoreboard, resetIn: AUTO_RESET_SECONDS, popularTiles: getPopularTiles() });
+      io.emit('bingo', { winner: p.name, winnerDeviceId: p.deviceId || null, scoreboard, resetIn: AUTO_RESET_SECONDS, popularTiles: getPopularTiles() });
       setTimeout(startNewGame, AUTO_RESET_SECONDS * 1000);
     }
   });
