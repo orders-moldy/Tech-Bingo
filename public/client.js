@@ -336,7 +336,7 @@ function showStatsOverlay({ list, weekendLeader, satLeader, sunLeader, popularTi
 function fireConfetti(big) {
   if (typeof confetti === 'undefined') return;
   const count = big ? 250 : 120;
-  confetti({ particleCount: count, spread: 80, origin: { y: 0.55 }, colors: ['#9BB6BF', '#ffffff', '#b3cdd5', '#ff6b6b', '#4ecdc4'] });
+  confetti({ particleCount: count, spread: 80, origin: { y: 0.55 }, colors: ['#9BB6BF', '#ECE6DF', '#7fa0ab', '#ffffff', '#d9cdbd'] });
   if (big) {
     setTimeout(() => confetti({ particleCount: 80, angle: 60,  spread: 55, origin: { x: 0, y: 0.6 } }), 200);
     setTimeout(() => confetti({ particleCount: 80, angle: 120, spread: 55, origin: { x: 1, y: 0.6 } }), 350);
