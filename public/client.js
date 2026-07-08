@@ -172,6 +172,13 @@ socket.on('kicked', () => {
   showJoinScreen('You joined from another tab, so this one signed out.');
 });
 
+// Name already in use at that campus by someone else — pick a different one
+socket.on('join_error', ({ message } = {}) => {
+  myName = ''; myCampus = '';
+  joinMsg.textContent = message || 'Could not join — try a different name.';
+  $('join-btn').disabled = false;
+});
+
 // Auto-rejoin after a dropped connection (server sleep, lost wifi)
 socket.on('connect', () => {
   if (myName) {

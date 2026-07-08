@@ -97,8 +97,9 @@ async function initDB() {
       created_at TIMESTAMP DEFAULT NOW()
     )
   `);
-  // Older deploys predate the archive flag — add it if missing
+  // Older deploys predate these columns — add them if missing
   await pool.query(`ALTER TABLE wins ADD COLUMN IF NOT EXISTS archived BOOLEAN DEFAULT FALSE`);
+  await pool.query(`ALTER TABLE wins ADD COLUMN IF NOT EXISTS device_id TEXT`);
   // Weekend chat log for the admin dashboard (wiped at reset)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS chat_messages (
@@ -150,19 +151,25 @@ function getWeekendInfo() {
   return { day: label, weekendStart: sat.toISOString().split('T')[0] };
 }
 
-async function recordWin(name, campus) {
+// Wins are keyed by device so two people who happen to pick the same
+// name at the same campus still count as separate players.
+async function recordWin({ name, campus, deviceId }) {
   const { day, weekendStart } = getWeekendInfo();
   if (pool) {
     await pool.query(
-      'INSERT INTO wins (name, campus, day, weekend_start) VALUES ($1, $2, $3, $4)',
-      [name, campus, day, weekendStart]
+      'INSERT INTO wins (name, campus, day, weekend_start, device_id) VALUES ($1, $2, $3, $4, $5)',
+      [name, campus, day, weekendStart, deviceId || null]
     );
   } else {
-    const key = `${name}|${campus}|${day}`;
-    if (!memScores[key]) memScores[key] = { name, campus, day, weekendStart, wins: 0 };
+    const key = `${deviceId || name}|${campus}|${day}`;
+    if (!memScores[key]) memScores[key] = { name, campus, day, weekendStart, deviceId: deviceId || null, wins: 0 };
     memScores[key].wins++;
   }
 }
+
+// Identity key for scoreboard grouping: device when known, else name+campus
+// (covers rows recorded before device tracking existed)
+const playerKey = row => (row.device_id || row.deviceId) ? `d:${row.device_id || row.deviceId}` : `${row.name}|${row.campus}`;
 
 const EMPTY_SCOREBOARD = { list: [], weekendLeader: null, satLeader: null, sunLeader: null };
 
@@ -172,9 +179,9 @@ async function getScoreboard() {
   if (pool) {
     const { weekendStart } = getWeekendInfo();
     const result = await pool.query(
-      `SELECT name, campus, day, COUNT(*) AS wins
+      `SELECT name, campus, day, device_id, COUNT(*) AS wins
        FROM wins WHERE weekend_start = $1 AND archived = FALSE
-       GROUP BY name, campus, day`,
+       GROUP BY name, campus, day, device_id`,
       [weekendStart]
     );
     rows = result.rows.map(r => ({ ...r, wins: parseInt(r.wins) }));
@@ -184,8 +191,8 @@ async function getScoreboard() {
 
   const byPlayer = {};
   for (const row of rows) {
-    const key = `${row.name}|${row.campus}`;
-    if (!byPlayer[key]) byPlayer[key] = { name: row.name, campus: row.campus, saturday: 0, sunday: 0, total: 0 };
+    const key = playerKey(row);
+    if (!byPlayer[key]) byPlayer[key] = { name: row.name, campus: row.campus, deviceId: row.device_id || row.deviceId || null, saturday: 0, sunday: 0, total: 0 };
     if (row.day === 'Saturday') byPlayer[key].saturday += row.wins;
     if (row.day === 'Sunday')   byPlayer[key].sunday   += row.wins;
     byPlayer[key].total += row.wins;
@@ -327,9 +334,9 @@ app.post('/admin/players', async (req, res) => {
   }
   try {
     const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
-    const winsFor = (name, campus) =>
-      scoreboard.list.find(p => p.name === name && p.campus === campus)?.total || 0;
-    const info = p => ({ name: p.name, campus: p.campus, device: p.device || null, wins: winsFor(p.name, p.campus), lastSeen: p.lastSeen || null });
+    const winsFor = p => scoreboard.list.find(e =>
+      e.deviceId ? e.deviceId === p.deviceId : (e.name === p.name && e.campus === p.campus))?.total || 0;
+    const info = p => ({ name: p.name, campus: p.campus, device: p.device || null, wins: winsFor(p), lastSeen: p.lastSeen || null });
 
     const activeStates = new Set(Object.values(players));
     const active = [...activeStates].map(info);
@@ -496,13 +503,13 @@ async function getHistory() {
 
   if (pool) {
     const result = await pool.query(
-      `SELECT name, campus, weekend_start, COUNT(*)::int AS wins
-       FROM wins GROUP BY name, campus, weekend_start`
+      `SELECT name, campus, weekend_start, device_id, COUNT(*)::int AS wins
+       FROM wins GROUP BY name, campus, weekend_start, device_id`
     );
     rows = result.rows;
   } else {
     rows = [...memArchive, ...Object.values(memScores)].map(r => ({
-      name: r.name, campus: r.campus, weekend_start: r.weekendStart || 'unknown', wins: r.wins,
+      name: r.name, campus: r.campus, weekend_start: r.weekendStart || 'unknown', device_id: r.deviceId || null, wins: r.wins,
     }));
   }
 
@@ -510,7 +517,7 @@ async function getHistory() {
   const byWeekend = {};
   for (const row of rows) {
     const wk = byWeekend[row.weekend_start] ??= {};
-    const key = `${row.name}|${row.campus}`;
+    const key = playerKey(row);
     if (!wk[key]) wk[key] = { name: row.name, campus: row.campus, wins: 0 };
     wk[key].wins += row.wins;
   }
@@ -519,7 +526,9 @@ async function getHistory() {
     .sort((a, b) => b[0].localeCompare(a[0])) // newest first
     .map(([weekendStart, playerMap]) => ({
       weekendStart,
-      players: Object.values(playerMap).sort((a, b) => b.wins - a.wins),
+      players: Object.entries(playerMap)
+        .map(([key, p]) => ({ ...p, key })) // identity key rides along for cross-weekend grouping
+        .sort((a, b) => b.wins - a.wins),
     }));
 
   // All-time totals + championship count (most wins in a weekend = 1 title)
@@ -527,10 +536,9 @@ async function getHistory() {
   for (const wk of weekends) {
     const topWins = wk.players[0]?.wins || 0;
     for (const p of wk.players) {
-      const key = `${p.name}|${p.campus}`;
-      if (!allTimeMap[key]) allTimeMap[key] = { name: p.name, campus: p.campus, wins: 0, titles: 0 };
-      allTimeMap[key].wins += p.wins;
-      if (p.wins === topWins) allTimeMap[key].titles++;
+      if (!allTimeMap[p.key]) allTimeMap[p.key] = { name: p.name, campus: p.campus, key: p.key, wins: 0, titles: 0 };
+      allTimeMap[p.key].wins += p.wins;
+      if (p.wins === topWins) allTimeMap[p.key].titles++;
     }
   }
   const allTime = Object.values(allTimeMap).sort((a, b) => b.wins - a.wins || b.titles - a.titles);
@@ -633,6 +641,20 @@ io.on('connection', socket => {
 
     let state = deviceId ? devicePlayers[deviceId] : null;
 
+    // A different device already using this exact name at this campus?
+    // Make the newcomer pick a unique name instead of silently merging.
+    if (!state) {
+      const known = new Set([...Object.values(devicePlayers), ...Object.values(players)]);
+      const clash = [...known].some(s =>
+        s.name.toLowerCase() === name.toLowerCase() && s.campus === campus);
+      if (clash) {
+        socket.emit('join_error', {
+          message: `"${name}" is already playing at ${campus} — add a last initial or pick another name.`,
+        });
+        return;
+      }
+    }
+
     if (state) {
       // Returning device — kick any old tab still holding this player, restore state
       const oldSocketId = Object.entries(players).find(([, p]) => p === state)?.[0];
@@ -722,7 +744,7 @@ io.on('connection', socket => {
       game.active = false;
       recentLog.push({ game: gameCount, phrases: p.card.filter(c => c !== 'FREE') });
 
-      try { await recordWin(p.name, p.campus); } catch (err) { console.error('recordWin failed:', err); }
+      try { await recordWin(p); } catch (err) { console.error('recordWin failed:', err); }
       const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
 
       io.emit('bingo', { winner: p.name, scoreboard, resetIn: AUTO_RESET_SECONDS, popularTiles: getPopularTiles() });

@@ -903,17 +903,19 @@
       }
       const campusAllTime = Object.values(campusMap).sort((a, b) => b.wins - a.wins || b.titles - a.titles);
 
-      // Per-player weekend breakdown — powers the expandable rows below
+      // Per-player weekend breakdown — powers the expandable rows below.
+      // Keyed by the server's identity key (device-based), so two players
+      // with the same name stay separate.
       const perPlayer = {};
       for (const wk of weekends) {
         wk.players.forEach(p => {
-          const k = `${p.name}|${p.campus}`;
+          const k = p.key || `${p.name}|${p.campus}`;
           (perPlayer[k] ??= []).push({ weekendStart: wk.weekendStart, wins: p.wins, champ: wk.players[0] === p });
         });
       }
 
       $('hist-champions').innerHTML = allTime.length ? allTime.slice(0, 5).map((p, i) => {
-        const breakdown = perPlayer[`${p.name}|${p.campus}`] || [];
+        const breakdown = perPlayer[p.key || `${p.name}|${p.campus}`] || [];
         const expandable = p.wins > 1;
         const row = `
           <div class="hist-champ${expandable ? ' expandable' : ''}"${expandable ? ' onclick="toggleHistDetail(this)" title="Show weekends won"' : ''}>
