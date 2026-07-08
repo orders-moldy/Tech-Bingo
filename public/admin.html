@@ -383,12 +383,149 @@
       .actions { grid-template-columns: 1fr; }
       th:nth-child(3), td:nth-child(3), th:nth-child(4), td:nth-child(4) { display: none; } /* hide Sat/Sun cols */
     }
+
+    /* ── Polish pass ── */
+
+    @keyframes rise    { from { transform: translateY(14px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes fade-up { from { transform: translateY(8px);  opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes pop     { from { transform: scale(0.86); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes float   { 0%, 100% { translate: 0 0; } 50% { translate: 0 -6px; } }
+
+    /* Login: centered brand treatment, animated entrance */
+    #login-view { align-items: center; text-align: center; animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+    #login-view input, #unlock-btn { width: 100%; }
+    #unlock-btn { padding: 14px; }
+    .login-logo {
+      filter: drop-shadow(0 0 22px rgba(155, 182, 191, 0.35)) drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+      animation: float 4.5s ease-in-out infinite;
+    }
+    .login-eyebrow {
+      font-size: 0.68rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--muted);
+    }
+
+    /* Dashboard entrance + tab-switch fade (display toggle replays the animation) */
+    #dash { animation: fade-up 0.4s ease; }
+    .panel { animation: fade-up 0.3s ease; }
+
+    /* Interaction states everywhere */
+    button, .tab { user-select: none; -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button:disabled { opacity: 0.55; cursor: default; transform: none !important; filter: none !important; }
+    .tabs { flex-wrap: wrap; }
+    .stat-value { font-variant-numeric: tabular-nums; }
+
+    /* Header icon buttons (refresh + sign out) */
+    .head-btn {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: rgba(32, 32, 74, 0.7);
+      border: 1px solid var(--line);
+      color: var(--accent);
+      font-size: 1rem;
+      padding: 0;
+    }
+    .head-btn:hover { border-color: var(--accent); filter: none; box-shadow: 0 0 12px rgba(155, 182, 191, 0.18); }
+
+    /* Row hovers — every list reacts to the pointer */
+    tr:hover td { background: rgba(155, 182, 191, 0.04); }
+    .hist-champ, .hist-weekend, .plr, .phr-row, .chatlog-row {
+      transition: background 0.12s;
+      border-radius: 8px;
+      padding-left: 8px; padding-right: 8px;
+      margin-left: -8px; margin-right: -8px;
+    }
+    .hist-champ:hover, .hist-weekend:hover, .plr:hover, .phr-row:hover, .chatlog-row:hover {
+      background: rgba(155, 182, 191, 0.05);
+    }
+
+    /* Expandable player rows in Win History */
+    .hist-champ.expandable { cursor: pointer; }
+    .hist-chevron { font-size: 0.75rem; color: var(--muted); flex-shrink: 0; margin-left: 2px; transition: transform 0.2s; }
+    .hist-champ.open .hist-chevron { transform: rotate(90deg); }
+    .hist-detail { padding: 2px 8px 10px 44px; display: flex; flex-direction: column; gap: 5px; animation: fade-up 0.2s ease; }
+    .hist-detail-row { display: flex; justify-content: space-between; gap: 10px; font-size: 0.8rem; color: var(--muted); }
+    .hist-detail-row .d-wins { color: var(--accent); font-weight: 700; white-space: nowrap; }
+
+    /* Status messages float as a toast pill */
+    #msg {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(8px);
+      background: linear-gradient(180deg, rgba(32, 32, 74, 0.97), rgba(25, 25, 54, 0.97));
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 22px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 60;
+      max-width: min(90vw, 480px);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #msg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Modal entrance + close hover */
+    .modal { animation: pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .modal-close:hover { color: var(--accent); border-color: var(--accent); filter: none; }
+
+    /* Thin themed scrollbars on every scroll region */
+    #chat-log, #phr-list, .modal {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(155, 182, 191, 0.25) transparent;
+    }
+    #chat-log::-webkit-scrollbar, #phr-list::-webkit-scrollbar, .modal::-webkit-scrollbar { width: 8px; }
+    #chat-log::-webkit-scrollbar-thumb, #phr-list::-webkit-scrollbar-thumb, .modal::-webkit-scrollbar-thumb {
+      background: rgba(155, 182, 191, 0.25);
+      border-radius: 999px;
+    }
+
+    .empty { text-align: center; padding: 12px 0; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
   </style>
 </head>
 <body>
 
   <!-- Login -->
   <div id="login-view">
+    <div class="login-logo" aria-hidden="true">
+      <svg viewBox="0 0 100 100" width="64" height="64" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="lg-card" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#2a2a5e"/>
+            <stop offset="1" stop-color="#1c1c40"/>
+          </linearGradient>
+          <linearGradient id="lg-stamp" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#c6dde5"/>
+            <stop offset="1" stop-color="#9BB6BF"/>
+          </linearGradient>
+        </defs>
+        <g transform="rotate(-7 50 50)">
+          <rect x="10" y="10" width="80" height="80" rx="14" fill="url(#lg-card)" stroke="rgba(155,182,191,0.35)" stroke-width="1.5"/>
+          <rect x="19" y="19" width="19" height="19" rx="5" fill="rgba(155,182,191,0.14)"/>
+          <rect x="41" y="19" width="19" height="19" rx="5" fill="url(#lg-stamp)"/>
+          <rect x="63" y="19" width="19" height="19" rx="5" fill="rgba(155,182,191,0.14)"/>
+          <rect x="19" y="41" width="19" height="19" rx="5" fill="url(#lg-stamp)"/>
+          <rect x="63" y="41" width="19" height="19" rx="5" fill="rgba(155,182,191,0.14)"/>
+          <rect x="19" y="63" width="19" height="19" rx="5" fill="rgba(155,182,191,0.14)"/>
+          <rect x="41" y="63" width="19" height="19" rx="5" fill="rgba(155,182,191,0.14)"/>
+          <rect x="63" y="63" width="19" height="19" rx="5" fill="url(#lg-stamp)"/>
+          <rect x="41" y="41" width="19" height="19" rx="5" fill="rgba(155,182,191,0.1)" stroke="rgba(155,182,191,0.5)" stroke-width="1.2" stroke-dasharray="3 2.4"/>
+          <path d="M50.5 44.2 l1.9 3.9 4.3 .6 -3.1 3 .7 4.2 -3.8 -2 -3.8 2 .7 -4.2 -3.1 -3 4.3 -.6 z" fill="#c6dde5"/>
+        </g>
+      </svg>
+    </div>
+    <div class="login-eyebrow">TCC Tech Bingo</div>
     <h1>Admin</h1>
     <p>Enter the admin password to open the dashboard.</p>
     <input type="password" id="pw" placeholder="Admin password" autocomplete="current-password">
@@ -405,19 +542,20 @@
       </div>
       <div class="head-right">
         <span id="status-pill" class="pill live">● Live</span>
-        <button id="refresh-btn" onclick="refreshAll()" title="Refresh">↻</button>
+        <button id="refresh-btn" class="head-btn" onclick="refreshAll()" title="Refresh">↻</button>
+        <button id="signout-btn" class="head-btn" onclick="signOut()" title="Sign out">🔒</button>
       </div>
     </header>
 
     <div class="stats-grid">
       <div class="stat-card clickable" onclick="openPlayers()" title="View player list">
         <div class="stat-value" id="stat-players">–</div>
-        <div class="stat-label">Playing now</div>
+        <div class="stat-label">👥 Playing now</div>
         <div class="stat-hint">tap to view ›</div>
       </div>
-      <div class="stat-card"><div class="stat-value" id="stat-wins">–</div><div class="stat-label">Weekend wins</div></div>
-      <div class="stat-card"><div class="stat-value" id="stat-games">–</div><div class="stat-label">Games today</div></div>
-      <div class="stat-card"><div class="stat-value" id="stat-phrases">–</div><div class="stat-label">Phrases</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-wins">–</div><div class="stat-label">🏆 Weekend wins</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-games">–</div><div class="stat-label">🎲 Games today</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-phrases">–</div><div class="stat-label">🧩 Phrases</div></div>
     </div>
 
     <nav class="tabs">
@@ -516,7 +654,23 @@
     let editingPhrase = null;  // phrase currently in inline-edit mode
 
     const $ = id => document.getElementById(id);
-    const setMsg = (text, cls = '') => { $('msg').textContent = text; $('msg').className = cls; };
+
+    // Toast-style status messages: slide up, auto-dismiss after 4s
+    let msgTimer = null;
+    const setMsg = (text, cls = '') => {
+      const el = $('msg');
+      clearTimeout(msgTimer);
+      if (!text) { el.className = ''; return; }
+      el.textContent = text;
+      el.className = 'show ' + cls;
+      msgTimer = setTimeout(() => { el.className = ''; }, 4000);
+    };
+
+    // Back to the lock screen (fresh state, password forgotten)
+    function signOut() {
+      adminPw = '';
+      location.reload();
+    }
     const esc = s => String(s).replace(/[&<>"']/g, c =>
       ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -749,15 +903,38 @@
       }
       const campusAllTime = Object.values(campusMap).sort((a, b) => b.wins - a.wins || b.titles - a.titles);
 
-      $('hist-champions').innerHTML = allTime.length ? allTime.slice(0, 5).map((p, i) => `
-        <div class="hist-champ">
-          <div class="hist-champ-rank">${medals[i] ?? `${i + 1}.`}</div>
-          <div class="hist-champ-info">
-            <div class="hist-champ-name">${esc(p.name)}</div>
-            <div class="hist-champ-sub">${esc(p.campus)} · ${p.titles} weekend title${p.titles !== 1 ? 's' : ''}</div>
-          </div>
-          <div class="hist-champ-wins">${p.wins}</div>
-        </div>`).join('') : '<p class="empty">No wins recorded yet.</p>';
+      // Per-player weekend breakdown — powers the expandable rows below
+      const perPlayer = {};
+      for (const wk of weekends) {
+        wk.players.forEach(p => {
+          const k = `${p.name}|${p.campus}`;
+          (perPlayer[k] ??= []).push({ weekendStart: wk.weekendStart, wins: p.wins, champ: wk.players[0] === p });
+        });
+      }
+
+      $('hist-champions').innerHTML = allTime.length ? allTime.slice(0, 5).map((p, i) => {
+        const breakdown = perPlayer[`${p.name}|${p.campus}`] || [];
+        const expandable = p.wins > 1;
+        const row = `
+          <div class="hist-champ${expandable ? ' expandable' : ''}"${expandable ? ' onclick="toggleHistDetail(this)" title="Show weekends won"' : ''}>
+            <div class="hist-champ-rank">${medals[i] ?? `${i + 1}.`}</div>
+            <div class="hist-champ-info">
+              <div class="hist-champ-name">${esc(p.name)}</div>
+              <div class="hist-champ-sub">${esc(p.campus)} · ${p.titles} weekend title${p.titles !== 1 ? 's' : ''}</div>
+            </div>
+            <div class="hist-champ-wins">${p.wins}</div>
+            ${expandable ? '<span class="hist-chevron">▸</span>' : ''}
+          </div>`;
+        const detail = expandable ? `
+          <div class="hist-detail hidden">
+            ${breakdown.map(b => `
+              <div class="hist-detail-row">
+                <span>📅 ${fmtWeekendRange(b.weekendStart)}${b.champ ? ' <span title="Weekend champion">🏆</span>' : ''}</span>
+                <span class="d-wins">${b.wins} win${b.wins !== 1 ? 's' : ''}</span>
+              </div>`).join('')}
+          </div>` : '';
+        return row + detail;
+      }).join('') : '<p class="empty">No wins recorded yet.</p>';
 
       $('hist-campuses').innerHTML = campusAllTime.length ? campusAllTime.map((c, i) => `
         <div class="hist-champ">
@@ -778,6 +955,12 @@
             <span class="hist-weekend-wins">${top.wins}</span>
           </div>`;
       }).join('') : '<p class="empty">No past weekends yet.</p>';
+    }
+
+    // Expand/collapse a player's per-weekend breakdown in Win History
+    function toggleHistDetail(row) {
+      row.classList.toggle('open');
+      row.nextElementSibling.classList.toggle('hidden');
     }
 
     // ── Weekend chat log ──
@@ -914,6 +1097,8 @@
     }
 
     async function doSuspend() {
+      const btn = $('suspend-btn');
+      btn.disabled = true; // no double-fires while the request is in flight
       setMsg(isSuspended ? 'Resuming…' : 'Suspending…');
       try {
         const data = await api('/admin/suspend', { active: isSuspended }); // active:true = resume
@@ -926,10 +1111,14 @@
         }
       } catch {
         setMsg('❌ Could not connect to server.', 'error');
+      } finally {
+        btn.disabled = false;
       }
     }
 
     async function doReset() {
+      const btn = $('reset-btn');
+      btn.disabled = true;
       setMsg('Resetting…');
       try {
         const data = await api('/admin/reset');
@@ -943,6 +1132,8 @@
         }
       } catch {
         setMsg('❌ Could not connect to server.', 'error');
+      } finally {
+        btn.disabled = false;
       }
     }
   </script>
