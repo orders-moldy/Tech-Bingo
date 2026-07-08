@@ -35,7 +35,9 @@ const MAX_NAME_LENGTH = 20;
 const DEVICE_EXPIRY_MS = 24 * 60 * 60 * 1000; // forget devices not seen for 24h (feeds the admin "recently active" list)
 const SUMMARY_EMAIL_TO = 'mbeacom@ampliosystems.com';
 
-const CAMPUSES = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
+// Seed list; once a database is connected the DB copy becomes the source of
+// truth (editable from the admin dashboard's Campuses tab).
+let allCampuses = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
 
 // Seed list; once a database is connected the DB copy becomes the source of
 // truth (editable from the admin dashboard) and this file is only the seed.
@@ -65,7 +67,7 @@ function cleanName(raw) {
 }
 
 function isValidCampus(campus) {
-  return CAMPUSES.includes(campus);
+  return allCampuses.includes(campus);
 }
 
 // ── 2. Database (falls back to in-memory if no DATABASE_URL) ──
@@ -126,6 +128,22 @@ async function initDB() {
     console.log(`Seeded ${allPhrases.length} phrases into the database`);
   } else {
     allPhrases = rows.map(r => r.text);
+  }
+  // Editable campus list — same seed-then-DB pattern as phrases
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS campuses (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL
+    )
+  `);
+  const campusRows = await pool.query('SELECT name FROM campuses ORDER BY id');
+  if (campusRows.rows.length === 0) {
+    for (const c of allCampuses) {
+      await pool.query('INSERT INTO campuses (name) VALUES ($1) ON CONFLICT DO NOTHING', [c]);
+    }
+    console.log(`Seeded ${allCampuses.length} campuses into the database`);
+  } else {
+    allCampuses = campusRows.rows.map(r => r.name);
   }
   console.log('Database connected ✓');
 }
@@ -292,6 +310,11 @@ async function sendSummaryEmail(scoreboard, popularTiles) {
 
 // ── 5. Admin endpoints ──
 
+// Public: the join screen fills its campus dropdown from this
+app.get('/campuses', (req, res) => {
+  res.json({ campuses: allCampuses });
+});
+
 function checkPassword(password) {
   return Boolean(process.env.ADMIN_PASSWORD) && password === process.env.ADMIN_PASSWORD;
 }
@@ -436,6 +459,98 @@ app.post('/admin/phrases', async (req, res) => {
   } catch (err) {
     console.error('Phrases failed:', err.message);
     res.status(500).json({ error: 'Phrase update failed' });
+  }
+});
+
+// Campus list editor. Actions: list / add / edit / remove.
+// Renaming a campus also updates recorded wins and connected players.
+
+const MAX_CAMPUS_LENGTH = 30;
+
+function cleanCampus(raw) {
+  if (typeof raw !== 'string') return null;
+  const name = raw.replace(/[<>]/g, '').trim().slice(0, MAX_CAMPUS_LENGTH);
+  return name.length ? name : null;
+}
+
+app.post('/admin/campuses', async (req, res) => {
+  if (!checkPassword(req.body.password)) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  const { action } = req.body;
+  const fail = msg => res.status(400).json({ error: msg });
+  try {
+    if (action === 'add') {
+      const name = cleanCampus(req.body.name);
+      if (!name) return fail('Campus name cannot be empty');
+      if (allCampuses.some(c => c.toLowerCase() === name.toLowerCase())) return fail('That campus already exists');
+      allCampuses.push(name);
+      if (pool) await pool.query('INSERT INTO campuses (name) VALUES ($1) ON CONFLICT DO NOTHING', [name]);
+
+    } else if (action === 'edit') {
+      const { oldName } = req.body;
+      const name = cleanCampus(req.body.name);
+      const idx = allCampuses.indexOf(oldName);
+      if (idx === -1) return fail('Original campus not found — refresh and try again');
+      if (!name) return fail('Campus name cannot be empty');
+      if (allCampuses.some((c, i) => i !== idx && c.toLowerCase() === name.toLowerCase())) return fail('That campus already exists');
+      allCampuses[idx] = name;
+      if (pool) {
+        await pool.query('UPDATE campuses SET name = $1 WHERE name = $2', [name, oldName]);
+        await pool.query('UPDATE wins SET campus = $1 WHERE campus = $2', [name, oldName]);
+      } else {
+        [...Object.values(memScores), ...memArchive].forEach(r => { if (r.campus === oldName) r.campus = name; });
+      }
+      // Move connected/recent players to the renamed campus too
+      new Set([...Object.values(devicePlayers), ...Object.values(players)]).forEach(p => {
+        if (p.campus === oldName) p.campus = name;
+      });
+      broadcastPlayers();
+
+    } else if (action === 'remove') {
+      const idx = allCampuses.indexOf(req.body.name);
+      if (idx === -1) return fail('Campus not found — refresh and try again');
+      if (allCampuses.length <= 1) return fail('At least one campus is required');
+      allCampuses.splice(idx, 1);
+      if (pool) await pool.query('DELETE FROM campuses WHERE name = $1', [req.body.name]);
+      // Past wins and already-joined players keep the old name; it just
+      // disappears from the join dropdown.
+    }
+    res.json({ ok: true, campuses: allCampuses });
+  } catch (err) {
+    console.error('Campuses failed:', err.message);
+    res.status(500).json({ error: 'Campus update failed' });
+  }
+});
+
+// Hard reset: permanently erases ALL game history — every win (archived
+// weekends included), the chat log, and tile counts. Phrases and campuses
+// survive. For clearing out test data; no summary email is sent.
+app.post('/admin/hard-reset', async (req, res) => {
+  if (!checkPassword(req.body.password)) {
+    return res.status(401).json({ error: 'Wrong password' });
+  }
+  try {
+    if (pool) {
+      await pool.query('DELETE FROM wins');
+      await pool.query('DELETE FROM chat_messages');
+    }
+    memScores = {};
+    memArchive = [];
+    phraseCounts = {};
+    chatHistory = [];
+    memChatLog = [];
+
+    if (suspended) {
+      suspended = false;
+      io.emit('resume');
+    }
+    io.emit('scoreboard_update', { ...EMPTY_SCOREBOARD, popularTiles: [] });
+    io.emit('chat_history', []);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Hard reset failed:', err.message);
+    res.status(500).json({ error: 'Hard reset failed' });
   }
 });
 

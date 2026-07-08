@@ -21,7 +21,8 @@ let myName = '';
 let myCampus = '';
 let countdownTimer = null;
 
-const CAMPUSES = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
+// Fallback until the live list arrives — campuses are managed from the admin dashboard
+let campuses = ['Plainfield', 'Bolingbrook', 'South Naperville', 'Naperville', 'Hinsdale', 'Wheaton'];
 
 const $ = id => document.getElementById(id);
 
@@ -68,6 +69,26 @@ const playersList = $('players-list');
 const scoreList   = $('score-list');
 const leadersEl   = $('leaders');
 const joinMsg     = $('join-msg');
+
+// Fill the join dropdown (placeholder option stays at index 0)
+function fillCampusSelect() {
+  const sel = $('campus-select');
+  const current = sel.value;
+  sel.length = 1;
+  campuses.forEach(c => sel.add(new Option(c, c)));
+  if (current && campuses.includes(current)) sel.value = current;
+}
+
+fillCampusSelect();
+fetch('/campuses')
+  .then(r => r.json())
+  .then(({ campuses: list }) => {
+    if (Array.isArray(list) && list.length) {
+      campuses = list;
+      fillCampusSelect();
+    }
+  })
+  .catch(() => {}); // fallback list already in place
 
 // ── 2. Join / leave flow ──
 
@@ -135,7 +156,8 @@ socket.on('players', players => {
     if (!groups[p.campus]) groups[p.campus] = [];
     groups[p.campus].push(p);
   });
-  playersList.innerHTML = CAMPUSES
+  // Known campuses in order, then any others (e.g. a campus renamed mid-game)
+  playersList.innerHTML = [...campuses, ...Object.keys(groups).filter(c => !campuses.includes(c))]
     .filter(c => groups[c])
     .map(c => `
       <div class="campus-group">

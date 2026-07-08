@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#9BB6BF">
+  <meta name="theme-color" content="#7FA2AD">
   <title>Admin — TCC Tech Bingo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,18 +21,20 @@
       --primary-soft: rgba(93, 133, 146, 0.12);
       --cream: #ECE6DF;
       --cream-soft: #ece5da;
-      --bg: #9BB6BF;
-      --wash-a: rgba(60, 100, 115, 0.22);
-      --wash-b: rgba(236, 230, 223, 0.55);
+      --bg: #7FA2AD;
+      --wash-a: rgba(50, 90, 105, 0.24);
+      --wash-b: rgba(236, 230, 223, 0.5);
       --surface: #f7f3ec;
       --line: rgba(70, 95, 105, 0.2);
       --text: #3a4247;
       --muted: #7f8b91;
       --on-primary: #ffffff;
-      --on-bg-text: #26333a;
-      --on-bg-accent: #2e3a3f;
-      --on-bg-muted: #3f5560;
-      --overlay: rgba(120, 148, 158, 0.45);
+      --on-bg-text: #21313a;
+      --on-bg-accent: #26363f;
+      --on-bg-muted: #35505b;
+      --overlay: rgba(105, 135, 145, 0.45);
+      --danger: #b97f74;
+      --danger-hi: #c89185;
       --radius: 14px;
       --shadow-card: 0 8px 28px rgba(40, 60, 70, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.8);
     }
@@ -58,6 +60,8 @@
       --on-bg-accent: #5d8592;
       --on-bg-muted: #8b939a;
       --overlay: rgba(236, 230, 223, 0.55);
+      --danger: #c98d81;
+      --danger-hi: #d69e93;
       --shadow-card: 0 8px 28px rgba(90, 110, 120, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
     }
 
@@ -308,7 +312,12 @@
       box-shadow: 0 4px 16px rgba(155, 182, 191, 0.45);
     }
     #suspend-btn.active { background: linear-gradient(180deg, #64ad85, #4a9e6a); color: #ffffff; box-shadow: 0 4px 16px rgba(74, 158, 106, 0.35); }
-    #reset-btn { background: linear-gradient(180deg, #e2685c, #cf5548); color: #ffffff; box-shadow: 0 4px 16px rgba(207, 85, 72, 0.3); }
+    #reset-btn, #hardreset-btn {
+      background: linear-gradient(180deg, var(--danger-hi), var(--danger));
+      color: #ffffff;
+      box-shadow: 0 4px 16px rgba(185, 127, 116, 0.35);
+    }
+    .action-wide { grid-column: 1 / -1; }
     .action-hint { font-size: 0.72rem; color: var(--muted); text-align: center; margin-top: 8px; line-height: 1.5; }
 
     /* Win history */
@@ -361,7 +370,7 @@
       flex-shrink: 0;
     }
     .icon-btn:hover { color: var(--primary-text); border-color: var(--primary); filter: none; }
-    .icon-btn.danger:hover { color: #cf5548; border-color: #cf5548; }
+    .icon-btn.danger:hover { color: var(--danger); border-color: var(--danger); }
     .icon-btn.save { color: #227a4c; }
 
     /* Players modal */
@@ -503,8 +512,8 @@
     }
     #msg.show { opacity: 1; transform: translateX(-50%) translateY(0); }
     #msg.success { color: #227a4c; }
-    #msg.error   { color: #c0392b; }
-    #login-msg   { font-size: 0.88rem; color: #c0392b; min-height: 1.3em; }
+    #msg.error   { color: #b0685c; }
+    #login-msg   { font-size: 0.88rem; color: #b0685c; min-height: 1.3em; }
 
     /* ── Motion & detail polish ── */
 
@@ -661,6 +670,7 @@
       <button class="tab" data-tab="history" onclick="showTab('history')">Win History</button>
       <button class="tab" data-tab="chat" onclick="showTab('chat')">Chat</button>
       <button class="tab" data-tab="phrases" onclick="showTab('phrases')">Phrases</button>
+      <button class="tab" data-tab="campuses" onclick="showTab('campuses')">Campuses</button>
     </nav>
 
     <section id="tab-overview">
@@ -689,6 +699,10 @@
           <div class="action">
             <button id="reset-btn" onclick="doReset()">🗑️ Reset Scores</button>
             <p class="action-hint">Archives the weekend, emails a summary. History is kept.</p>
+          </div>
+          <div class="action action-wide">
+            <button id="hardreset-btn" onclick="doHardReset(this)">🧹 Erase All History</button>
+            <p class="action-hint">Permanently deletes every win, past weekend, and chat message — for clearing out test data. Phrases and campuses are kept. Click twice to confirm.</p>
           </div>
         </div>
       </div>
@@ -729,6 +743,18 @@
       </div>
     </section>
 
+    <section id="tab-campuses" class="hidden">
+      <div class="panel">
+        <div class="panel-title" id="campuses-title">🏫 Campuses</div>
+        <p class="phr-note">Locations players choose from when joining. Renaming a campus updates its recorded wins and connected players too; removing one keeps its history but takes it off the join screen.</p>
+        <div class="phr-add">
+          <input type="text" id="cmp-new" maxlength="30" placeholder="Add a campus…">
+          <button id="cmp-add-btn" onclick="addCampus()">Add</button>
+        </div>
+        <div id="cmp-list"><p class="empty">Loading…</p></div>
+      </div>
+    </section>
+
     <div id="msg"></div>
   </div>
 
@@ -752,6 +778,8 @@
     let chatLoaded = false;
     let phrasesCache = null;   // current phrase list, null until first load
     let editingPhrase = null;  // phrase currently in inline-edit mode
+    let campusesCache = null;  // current campus list, null until first load
+    let editingCampus = null;  // campus currently in inline-edit mode
 
     const $ = id => document.getElementById(id);
 
@@ -827,9 +855,11 @@
       $('tab-history').classList.toggle('hidden', name !== 'history');
       $('tab-chat').classList.toggle('hidden', name !== 'chat');
       $('tab-phrases').classList.toggle('hidden', name !== 'phrases');
+      $('tab-campuses').classList.toggle('hidden', name !== 'campuses');
       if (name === 'history' && !historyLoaded) loadHistory();
       if (name === 'chat' && !chatLoaded) loadChat();
       if (name === 'phrases' && phrasesCache === null) loadPhrases();
+      if (name === 'campuses' && campusesCache === null) loadCampuses();
     }
 
     // ── Overview ──
@@ -1215,6 +1245,88 @@
       }
     }
 
+    // ── Campus editor ──
+
+    async function loadCampuses() {
+      await campusAction({ action: 'list' });
+    }
+
+    async function campusAction(body) {
+      try {
+        const data = await api('/admin/campuses', body);
+        if (!data.ok) { setMsg('❌ ' + (data.error || 'Failed'), 'error'); return false; }
+        campusesCache = data.campuses;
+        editingCampus = null;
+        renderCampuses();
+        setMsg('');
+        return true;
+      } catch {
+        setMsg('❌ Could not connect to server.', 'error');
+        return false;
+      }
+    }
+
+    function renderCampuses() {
+      if (campusesCache === null) return;
+      $('campuses-title').textContent = `🏫 Campuses (${campusesCache.length})`;
+
+      $('cmp-list').innerHTML = campusesCache.map(c => {
+        if (c === editingCampus) {
+          return `
+            <div class="phr-row">
+              <input type="text" id="cmp-edit-input" maxlength="30" value="${esc(c)}"
+                     onkeydown="if (event.key === 'Enter') saveEditCampus(); if (event.key === 'Escape') cancelEditCampus();">
+              <button class="icon-btn save" title="Save" onclick="saveEditCampus()">✓</button>
+              <button class="icon-btn" title="Cancel" onclick="cancelEditCampus()">✕</button>
+            </div>`;
+        }
+        return `
+          <div class="phr-row">
+            <span class="phr-text">${esc(c)}</span>
+            <button class="icon-btn" title="Rename" onclick="startEditCampus(this)" data-campus="${esc(c)}">✎</button>
+            <button class="icon-btn danger" title="Remove" onclick="removeCampus(this)" data-campus="${esc(c)}">✕</button>
+          </div>`;
+      }).join('');
+
+      const editInput = $('cmp-edit-input');
+      if (editInput) { editInput.focus(); editInput.select(); }
+    }
+
+    async function addCampus() {
+      const name = $('cmp-new').value.trim();
+      if (!name) { $('cmp-new').focus(); return; }
+      if (await campusAction({ action: 'add', name })) {
+        $('cmp-new').value = '';
+        setMsg('✅ Campus added.', 'success');
+      }
+    }
+    $('cmp-new').addEventListener('keydown', e => { if (e.key === 'Enter') addCampus(); });
+
+    function startEditCampus(btn) {
+      editingCampus = btn.dataset.campus;
+      renderCampuses();
+    }
+
+    function cancelEditCampus() {
+      editingCampus = null;
+      renderCampuses();
+    }
+
+    async function saveEditCampus() {
+      const name = $('cmp-edit-input').value.trim();
+      const oldName = editingCampus;
+      if (!name || name === oldName) { cancelEditCampus(); return; }
+      if (await campusAction({ action: 'edit', oldName, name })) {
+        setMsg('✅ Campus renamed — wins and players moved with it.', 'success');
+      }
+    }
+
+    async function removeCampus(btn) {
+      if (await campusAction({ action: 'remove', name: btn.dataset.campus })) {
+        setMsg('✅ Campus removed from the join screen.', 'success');
+      }
+    }
+
     // ── Actions ──
 
     async function refreshAll() {
@@ -1236,6 +1348,39 @@
           isSuspended = data.suspended;
           updateStatusUI();
           setMsg(isSuspended ? '✅ Stats screen shown to all players.' : '✅ Play resumed.', 'success');
+        } else {
+          setMsg('❌ ' + (data.error || 'Failed'), 'error');
+        }
+      } catch {
+        setMsg('❌ Could not connect to server.', 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Two clicks within 4s required — this one erases everything, forever
+    let hardResetTimer = null;
+    async function doHardReset(btn) {
+      if (!hardResetTimer) {
+        btn.textContent = '⚠️ Click again to erase everything';
+        hardResetTimer = setTimeout(() => {
+          hardResetTimer = null;
+          btn.textContent = '🧹 Erase All History';
+        }, 4000);
+        return;
+      }
+      clearTimeout(hardResetTimer);
+      hardResetTimer = null;
+      btn.textContent = '🧹 Erase All History';
+      btn.disabled = true;
+      setMsg('Erasing all history…');
+      try {
+        const data = await api('/admin/hard-reset');
+        if (data.ok) {
+          historyLoaded = false;
+          chatLoaded = false;
+          await refreshOverview();
+          setMsg('✅ All game history erased — fresh slate.', 'success');
         } else {
           setMsg('❌ ' + (data.error || 'Failed'), 'error');
         }

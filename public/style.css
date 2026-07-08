@@ -29,19 +29,19 @@
   --primary-soft: rgba(93, 133, 146, 0.12);
   --cream: #ECE6DF;              /* warm secondary */
   --cream-soft: #ece5da;
-  --bg: #9BB6BF;                 /* the dusty blue owns the page */
-  --wash-a: rgba(60, 100, 115, 0.22);
-  --wash-b: rgba(236, 230, 223, 0.55);
+  --bg: #7FA2AD;                 /* the dusty blue owns the page */
+  --wash-a: rgba(50, 90, 105, 0.24);
+  --wash-b: rgba(236, 230, 223, 0.5);
   --surface: #f7f3ec;            /* cream-white cards */
   --line: rgba(70, 95, 105, 0.2);
   --text: #3a4247;
   --muted: #7f8b91;
   --on-primary: #ffffff;
-  --on-bg-text: #26333a;         /* text sitting directly on the blue page */
-  --on-bg-accent: #2e3a3f;
-  --on-bg-muted: #3f5560;
+  --on-bg-text: #21313a;         /* text sitting directly on the blue page */
+  --on-bg-accent: #26363f;
+  --on-bg-muted: #35505b;
   --glow: rgba(255, 255, 255, 0.85);
-  --overlay: rgba(120, 148, 158, 0.45);
+  --overlay: rgba(105, 135, 145, 0.45);
 
   /* Shape & depth — soft and warm, no neon */
   --radius: 14px;

@@ -26,6 +26,8 @@ Enter the admin password to unlock two controls:
 3. **📜 Win History** — all-time champions (total wins + weekend titles) and past weekend winners, accumulated across every weekend played.
 4. **💬 Chat** — the full weekend chat log (deleted at reset).
 5. **🧩 Phrases** — add, edit, or remove the phrases that feed the bingo tiles.
+6. **🏫 Campuses** — manage the campus list on the join screen; renames carry wins and players along.
+7. **🧹 Erase All History** (Overview tab, double-click to confirm) — permanently wipes every win, weekend, and chat message for clearing out test data. Phrases and campuses survive.
 
 ## Editing phrases
 
