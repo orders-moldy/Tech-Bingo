@@ -20,24 +20,58 @@
 
 /* ── 1. Design tokens & base ── */
 
+/* Blue mode (default): #9BB6BF fills the page; cream #ECE6DF is the accent */
 :root {
-  /* Palette */
-  --primary: #9BB6BF;            /* dusty blue — buttons, marks, highlights */
-  --primary-dark: #7fa0ab;       /* deeper blue — hovers, letters */
-  --primary-text: #5d8592;       /* blue that reads as text on light bg */
-  --primary-soft: rgba(155, 182, 191, 0.14);
+  --primary: #5d8592;            /* deep dusty blue — buttons, marks, highlights */
+  --primary-hi: #6f96a3;         /* gradient top for buttons/marks */
+  --primary-dark: #46707d;
+  --primary-text: #46707d;       /* blue that reads as text on cream surfaces */
+  --primary-soft: rgba(93, 133, 146, 0.12);
   --cream: #ECE6DF;              /* warm secondary */
-  --cream-soft: #f4f0ea;
-  --bg: #f7f5f1;                 /* warm off-white page */
-  --surface: #ffffff;
-  --line: rgba(95, 115, 125, 0.16);
-  --text: #3f464b;               /* soft charcoal, like the church site */
-  --muted: #8b939a;
-  --on-primary: #2e3a3f;         /* dark slate on dusty blue */
+  --cream-soft: #ece5da;
+  --bg: #9BB6BF;                 /* the dusty blue owns the page */
+  --wash-a: rgba(60, 100, 115, 0.22);
+  --wash-b: rgba(236, 230, 223, 0.55);
+  --surface: #f7f3ec;            /* cream-white cards */
+  --line: rgba(70, 95, 105, 0.2);
+  --text: #3a4247;
+  --muted: #7f8b91;
+  --on-primary: #ffffff;
+  --on-bg-text: #26333a;         /* text sitting directly on the blue page */
+  --on-bg-accent: #2e3a3f;
+  --on-bg-muted: #3f5560;
+  --glow: rgba(255, 255, 255, 0.85);
+  --overlay: rgba(120, 148, 158, 0.45);
 
   /* Shape & depth — soft and warm, no neon */
   --radius: 14px;
   --radius-lg: 22px;
+  --shadow-card: 0 8px 28px rgba(40, 60, 70, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --shadow-pop: 0 24px 70px rgba(35, 55, 65, 0.3);
+}
+
+/* Cream mode (toggle): warm off-white page, dusty blue as the accent */
+:root[data-theme="cream"] {
+  --primary: #9BB6BF;
+  --primary-hi: #a9c2ca;
+  --primary-dark: #7fa0ab;
+  --primary-text: #5d8592;
+  --primary-soft: rgba(155, 182, 191, 0.14);
+  --cream: #ECE6DF;
+  --cream-soft: #f4f0ea;
+  --bg: #f7f5f1;
+  --wash-a: rgba(155, 182, 191, 0.18);
+  --wash-b: rgba(236, 230, 223, 0.9);
+  --surface: #ffffff;
+  --line: rgba(95, 115, 125, 0.16);
+  --text: #3f464b;
+  --muted: #8b939a;
+  --on-primary: #2e3a3f;
+  --on-bg-text: #3f464b;
+  --on-bg-accent: #5d8592;
+  --on-bg-muted: #8b939a;
+  --glow: rgba(155, 182, 191, 0.8);
+  --overlay: rgba(236, 230, 223, 0.55);
   --shadow-card: 0 8px 28px rgba(90, 110, 120, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
   --shadow-pop: 0 24px 70px rgba(70, 90, 100, 0.25);
 }
@@ -45,8 +79,8 @@
 body {
   font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
   background:
-    radial-gradient(1000px 600px at 88% -10%, rgba(155, 182, 191, 0.18), transparent 60%),
-    radial-gradient(900px 700px at -10% 100%, rgba(236, 230, 223, 0.9), transparent 65%),
+    radial-gradient(1000px 600px at 88% -10%, var(--wash-a), transparent 60%),
+    radial-gradient(900px 700px at -10% 100%, var(--wash-b), transparent 65%),
     var(--bg);
   background-attachment: fixed;
   color: var(--text);
@@ -97,7 +131,7 @@ select:invalid { color: var(--muted); }
 button {
   width: 100%;
   padding: 14px;
-  background: linear-gradient(180deg, #a9c2ca, var(--primary));
+  background: linear-gradient(180deg, var(--primary-hi), var(--primary));
   color: var(--on-primary);
   border: none;
   border-radius: var(--radius);
@@ -210,14 +244,14 @@ header {
   font-weight: 600;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--primary-text);
+  color: var(--on-bg-accent);
   cursor: pointer;
   transition: opacity 0.15s;
 }
 .logo:hover { opacity: 0.7; }
 
 #player-count {
-  color: var(--muted);
+  color: var(--on-bg-muted);
   font-size: 0.84rem;
   font-weight: 500;
 }
@@ -239,7 +273,7 @@ header {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: var(--primary-text);
+  color: var(--on-bg-accent);
   padding-bottom: 6px;
 }
 
@@ -255,7 +289,7 @@ header {
   font-size: 1.3rem;
   font-weight: 400;
   letter-spacing: 0.06em;
-  color: var(--primary-dark);
+  color: var(--on-bg-accent);
   padding: 2px 0 6px;
 }
 
@@ -447,12 +481,12 @@ header {
 }
 
 .cell.marked {
-  background: linear-gradient(165deg, #a9c2ca, var(--primary));
+  background: linear-gradient(165deg, var(--primary-hi), var(--primary));
   color: var(--on-primary);
   font-weight: 600;
   cursor: default;
   border-color: transparent;
-  box-shadow: 0 4px 14px rgba(155, 182, 191, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 14px rgba(60, 90, 100, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .cell.free {
@@ -491,7 +525,7 @@ header {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: var(--muted);
+  color: var(--on-bg-muted);
 }
 
 #players-list {
@@ -514,7 +548,7 @@ header {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--primary-text);
+  color: var(--on-bg-accent);
   white-space: nowrap;
   margin-bottom: 3px;
 }
@@ -544,8 +578,8 @@ header {
 
 /* Slow pulse on anyone one tile away from bingo */
 @keyframes hot-glow {
-  0%, 100% { box-shadow: 0 0 2px rgba(155, 182, 191, 0); }
-  50%      { box-shadow: 0 0 14px rgba(155, 182, 191, 0.8); }
+  0%, 100% { box-shadow: 0 0 2px transparent; }
+  50%      { box-shadow: 0 0 14px var(--glow); }
 }
 
 .player-chip.hot {
@@ -685,7 +719,7 @@ header {
 #win-overlay, #stats-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(236, 230, 223, 0.55);
+  background: var(--overlay);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   display: flex;
@@ -899,6 +933,31 @@ header {
 .stats-no-data {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+/* ── Theme toggle (blue ↔ cream) ── */
+
+#theme-toggle {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--primary-text);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 20px rgba(40, 60, 70, 0.25);
+  font-size: 1.15rem;
+  z-index: 300;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+#theme-toggle:hover {
+  filter: none;
+  transform: scale(1.08);
+  box-shadow: 0 8px 26px rgba(40, 60, 70, 0.3);
 }
 
 /* ── 9. Responsive layouts ── */

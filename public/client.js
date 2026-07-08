@@ -45,6 +45,17 @@ function getDeviceType() {
   return mobile ? 'mobile' : 'desktop';
 }
 
+// Theme: blue-dominant by default; "cream" flips the palette. Saved per device.
+if (localStorage.getItem('bingo_theme') === 'cream') {
+  document.documentElement.dataset.theme = 'cream';
+}
+$('theme-toggle').addEventListener('click', () => {
+  const toCream = document.documentElement.dataset.theme !== 'cream';
+  if (toCream) document.documentElement.dataset.theme = 'cream';
+  else delete document.documentElement.dataset.theme;
+  localStorage.setItem('bingo_theme', toCream ? 'cream' : 'blue');
+});
+
 const joinScreen  = $('join-screen');
 const gameScreen  = $('game-screen');
 const winOverlay  = $('win-overlay');
