@@ -230,13 +230,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
   padding-bottom: max(24px, env(safe-area-inset-bottom));
 }
 
-header {
-  width: 100%;
-  max-width: 860px;
+/* Logo sits centered above the scoreboard column */
+#logo-wrap {
+  grid-column: 1; grid-row: 1;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 18px 16px 12px;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 8px;
 }
 
 .logo {
@@ -250,11 +250,17 @@ header {
 }
 .logo:hover { opacity: 0.7; }
 
+/* Player count lives at the bottom of the scoreboard panel */
 #player-count {
-  color: var(--on-bg-muted);
-  font-size: 0.84rem;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
   font-weight: 500;
 }
+#player-count:empty { display: none; }
 
 #content {
   display: grid;
@@ -263,18 +269,18 @@ header {
   gap: 6px 18px;
   width: 100%;
   max-width: 860px;
-  padding: 0 12px;
+  padding: 18px 12px 0;
 }
 
+/* Title now lives inside the scoreboard panel */
 #sb-title {
-  grid-column: 1; grid-row: 1;
-  align-self: end;
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.16em;
-  color: var(--on-bg-accent);
-  padding-bottom: 6px;
+  color: var(--primary-text);
+  text-align: center;
+  margin-bottom: 10px;
 }
 
 #col-headers {
@@ -978,14 +984,14 @@ header {
   #chat-messages { height: 320px; }
 }
 
-/* Single column: letters, card, players, chat, then scoreboard */
+/* Single column: logo, letters, card, players, chat, scoreboard, count */
 @media (max-width: 620px) {
   #content { grid-template-columns: 1fr; }
-  #col-headers     { grid-column: 1; grid-row: 1; }
-  #card            { grid-column: 1; grid-row: 2; }
-  #players-section { grid-column: 1; grid-row: 3; }
-  #chat-section    { grid-column: 1; grid-row: 4; }
-  #sb-title        { grid-column: 1; grid-row: 5; padding-top: 10px; }
+  #logo-wrap       { grid-column: 1; grid-row: 1; padding: 2px 0 8px; }
+  #col-headers     { grid-column: 1; grid-row: 2; }
+  #card            { grid-column: 1; grid-row: 3; }
+  #players-section { grid-column: 1; grid-row: 4; }
+  #chat-section    { grid-column: 1; grid-row: 5; }
   #scoreboard      { grid-column: 1; grid-row: 6; position: static; }
   #chat-messages   { height: 160px; }
 }
