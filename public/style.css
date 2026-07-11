@@ -91,6 +91,11 @@ body {
 
 .hidden { display: none !important; }
 
+/* Help text wraps in balanced lines — never one stranded word on its own line */
+.join-box p, .join-msg, .empty-state, .countdown, #win-message, .stats-no-data {
+  text-wrap: balance;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }

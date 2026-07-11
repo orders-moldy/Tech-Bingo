@@ -74,6 +74,11 @@ body {
 
 .hidden { display: none !important; }
 
+/* Help text wraps in balanced lines — never one stranded word on its own line */
+#login-view p, .action-hint, .phr-note, .empty {
+  text-wrap: balance;
+}
+
 input[type="password"], input[type="text"] {
   width: 100%;
   padding: 13px 16px;
