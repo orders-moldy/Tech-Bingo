@@ -47,10 +47,13 @@
       <h1>Welcome to<br>TCC Tech Bingo!</h1>
       <p>Enter your name and select your campus</p>
       <input id="name-input" type="text" placeholder="Your name" maxlength="20" autocomplete="off">
-      <select id="campus-select">
-        <option value="" disabled selected>Select your campus</option>
-        <!-- options filled by client.js from /campuses -->
-      </select>
+      <div class="dropdown" id="campus-dd">
+        <button type="button" class="dropdown-btn" id="campus-btn">
+          <span id="campus-label">Select your campus</span>
+          <span class="dd-caret">▾</span>
+        </button>
+        <div class="dropdown-menu hidden" id="campus-menu"><!-- filled by client.js --></div>
+      </div>
       <button id="join-btn">Play</button>
       <p id="join-msg" class="join-msg"></p>
     </div>

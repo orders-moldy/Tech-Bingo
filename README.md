@@ -22,12 +22,14 @@ Multiplayer buzzword bingo for live services. Players listen to the speaker and 
 Enter the admin password to unlock two controls:
 
 1. **📊 Show Stats Screen** — pauses play and pushes a full-screen leaderboard + most-marked-tiles summary to every player. Click again to resume.
-2. **🗑️ Reset Scores** — archives the weekend scoreboard and emails a summary (leaders, full list, most-marked tiles). Archived weekends stay visible in Win History.
+2. **🗑️ Reset Scores** — archives the weekend scoreboard into Win History and clears the chat.
 3. **📜 Win History** — all-time champions (total wins + weekend titles) and past weekend winners, accumulated across every weekend played.
 4. **💬 Chat** — the full weekend chat log (deleted at reset).
 5. **🧩 Phrases** — add, edit, or remove the phrases that feed the bingo tiles.
 6. **🏫 Campuses** — manage the campus list on the join screen; renames carry wins and players along.
-7. **🧹 Erase All History** (Overview tab, double-click to confirm) — permanently wipes every win, weekend, and chat message for clearing out test data. Phrases and campuses survive.
+7. **🧹 Erase All History** (Overview tab, double-click to confirm) — permanently wipes every win, weekend, chat message, and the recent-player roster for clearing out test data. Phrases and campuses survive.
+
+Admin endpoints are brute-force protected: 8 wrong passwords from one IP locks that IP out for 15 minutes.
 
 ## Editing phrases
 
@@ -41,10 +43,8 @@ Use the **Phrases tab in the admin dashboard** (`/admin.html`) — add, edit, or
 |---|---|
 | `DATABASE_URL` | Neon PostgreSQL connection string (scores persist across server sleeps) |
 | `ADMIN_PASSWORD` | Password for `/admin.html` |
-| `GMAIL_USER` | Gmail address that sends the summary email |
-| `GMAIL_APP_PASSWORD` | Gmail app password for that account |
 
-Without `DATABASE_URL`, scores fall back to memory and reset when the server sleeps. Without the Gmail vars, the reset still works — it just skips the email.
+Without `DATABASE_URL`, scores fall back to memory and reset when the server sleeps.
 
 ## Run locally
 

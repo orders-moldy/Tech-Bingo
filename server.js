@@ -5,22 +5,21 @@
 //    1. Config & state
 //    2. Database (PostgreSQL, falls back to in-memory)
 //    3. Scoreboard & weekend logic
-//    4. Email summary
-//    5. Admin endpoints (login / suspend / reset)
-//    6. Game logic (cards, win detection, phrase rotation)
-//    7. Socket handlers (join / mark / leave)
+//    4. Admin endpoints (auth / suspend / reset / editors)
+//    5. Game logic (cards, win detection, phrase rotation)
+//    6. Socket handlers (join / mark / leave / chat)
 // ─────────────────────────────────────────────────────────────
 
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const fs = require('fs');
-const nodemailer = require('nodemailer');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+app.set('trust proxy', 1); // Render sits behind a proxy — needed for real client IPs
 app.use(express.static('public'));
 app.use(express.json());
 
@@ -33,7 +32,6 @@ const COOLDOWN_GAMES = 3;         // games before a winning card's phrases can r
 const AUTO_RESET_SECONDS = 6;     // countdown after a bingo before new cards deal
 const MAX_NAME_LENGTH = 20;
 const DEVICE_EXPIRY_MS = 24 * 60 * 60 * 1000; // forget devices not seen for 24h (feeds the admin "recently active" list)
-const SUMMARY_EMAIL_TO = 'mbeacom@ampliosystems.com';
 
 // Seed list; once a database is connected the DB copy becomes the source of
 // truth (editable from the admin dashboard's Campuses tab).
@@ -227,88 +225,7 @@ async function getScoreboard() {
   };
 }
 
-// ── 4. Email summary ──
-
-function buildEmailHtml({ list, weekendLeader, satLeader, sunLeader }, popularTiles) {
-  const row = (icon, label, entry, wins) => `
-    <tr>
-      <td style="padding:6px 12px;font-size:15px;">${icon}</td>
-      <td style="padding:6px 12px;">
-        <strong>${label}</strong><br>
-        <span style="color:#555;">${entry.name} &mdash; ${entry.campus}</span>
-      </td>
-      <td style="padding:6px 12px;font-size:1.3rem;font-weight:800;color:#9BB6BF;text-align:right;">${wins}</td>
-    </tr>`;
-
-  const leaders = [
-    weekendLeader ? row('🏆', 'Weekend Leader', weekendLeader, weekendLeader.total) : '',
-    satLeader     ? row('📅', 'Saturday Leader', satLeader,     satLeader.saturday)  : '',
-    sunLeader     ? row('📅', 'Sunday Leader',   sunLeader,     sunLeader.sunday)    : '',
-  ].join('');
-
-  const fullList = list.map((e, i) => `
-    <tr style="border-top:1px solid #eee;">
-      <td style="padding:5px 12px;color:#999;">${i + 1}.</td>
-      <td style="padding:5px 12px;">${e.name} <span style="color:#aaa;font-size:0.85em;">${e.campus}</span></td>
-      <td style="padding:5px 12px;text-align:right;">
-        ${e.total} total
-        <span style="color:#aaa;font-size:0.8em;">(Sat&nbsp;${e.saturday} / Sun&nbsp;${e.sunday})</span>
-      </td>
-    </tr>`).join('');
-
-  const popular = (popularTiles || []).map((phrase, i) => `
-    <tr style="border-top:1px solid #eee;">
-      <td style="padding:5px 12px;color:#999;">${i + 1}.</td>
-      <td style="padding:5px 12px;">${phrase}</td>
-    </tr>`).join('');
-
-  return `
-    <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;color:#222;">
-      <h2 style="color:#9BB6BF;margin-bottom:4px;">TCC Tech Bingo</h2>
-      <p style="color:#777;margin-top:0;">Weekend leaderboard summary (captured at reset)</p>
-
-      ${leaders ? `
-      <table style="width:100%;border-collapse:collapse;background:#f9f9f9;border-radius:8px;margin-bottom:24px;">
-        ${leaders}
-      </table>` : '<p style="color:#aaa;">No wins recorded this weekend.</p>'}
-
-      ${list.length ? `
-      <h3 style="margin-bottom:8px;">Full Scoreboard</h3>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
-        ${fullList}
-      </table>` : ''}
-
-      ${popular ? `
-      <h3 style="margin-bottom:8px;">🔥 Most Marked Tiles</h3>
-      <table style="width:100%;border-collapse:collapse;">
-        ${popular}
-      </table>` : ''}
-    </div>`;
-}
-
-async function sendSummaryEmail(scoreboard, popularTiles) {
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-    console.log('No email credentials — skipping summary email');
-    return;
-  }
-  if (!scoreboard.list.length) return; // nothing to report
-
-  const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-  });
-
-  await transporter.sendMail({
-    from: `TCC Tech Bingo <${process.env.GMAIL_USER}>`,
-    to: SUMMARY_EMAIL_TO,
-    subject: 'TCC Tech Bingo — Weekend Leaderboard Summary',
-    html: buildEmailHtml(scoreboard, popularTiles),
-  });
-
-  console.log('Summary email sent');
-}
-
-// ── 5. Admin endpoints ──
+// ── 4. Admin endpoints ──
 
 // Public: the join screen fills its campus dropdown from this
 app.get('/campuses', (req, res) => {
@@ -319,19 +236,35 @@ function checkPassword(password) {
   return Boolean(process.env.ADMIN_PASSWORD) && password === process.env.ADMIN_PASSWORD;
 }
 
-// Verifies the password up front so the admin page only unlocks for real admins.
-app.post('/admin/login', (req, res) => {
+// Brute-force protection: 8 wrong passwords from one IP locks that IP out
+// of every admin endpoint for 15 minutes.
+const AUTH_MAX_FAILS = 8;
+const AUTH_LOCKOUT_MS = 15 * 60 * 1000;
+const authFails = {}; // ip -> { count, firstAt }
+
+function requireAdmin(req, res, next) {
+  const ip = req.ip;
+  const rec = authFails[ip];
+  if (rec && Date.now() - rec.firstAt >= AUTH_LOCKOUT_MS) delete authFails[ip];
+  if (authFails[ip] && authFails[ip].count >= AUTH_MAX_FAILS) {
+    return res.status(429).json({ error: 'Too many attempts — locked out for 15 minutes' });
+  }
   if (!checkPassword(req.body.password)) {
+    const r = authFails[ip] ??= { count: 0, firstAt: Date.now() };
+    r.count++;
     return res.status(401).json({ error: 'Wrong password' });
   }
+  delete authFails[ip];
+  next();
+}
+
+// Verifies the password up front so the admin page only unlocks for real admins.
+app.post('/admin/login', requireAdmin, (req, res) => {
   res.json({ ok: true, suspended });
 });
 
 // Snapshot for the admin dashboard: live counts + current weekend standings.
-app.post('/admin/overview', async (req, res) => {
-  if (!checkPassword(req.body.password)) {
-    return res.status(401).json({ error: 'Wrong password' });
-  }
+app.post('/admin/overview', requireAdmin, async (req, res) => {
   try {
     const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
     res.json({
@@ -351,10 +284,7 @@ app.post('/admin/overview', async (req, res) => {
 
 // Player roster for the admin dashboard: who's connected right now, plus
 // devices seen in the last 24h. Both carry weekend win counts and device type.
-app.post('/admin/players', async (req, res) => {
-  if (!checkPassword(req.body.password)) {
-    return res.status(401).json({ error: 'Wrong password' });
-  }
+app.post('/admin/players', requireAdmin, async (req, res) => {
   try {
     const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
     const winsFor = p => scoreboard.list.find(e =>
@@ -378,10 +308,7 @@ app.post('/admin/players', async (req, res) => {
 });
 
 // Full chat log for the current weekend (admin dashboard). Cleared at reset.
-app.post('/admin/chat', async (req, res) => {
-  if (!checkPassword(req.body.password)) {
-    return res.status(401).json({ error: 'Wrong password' });
-  }
+app.post('/admin/chat', requireAdmin, async (req, res) => {
   try {
     let messages;
     if (pool) {
@@ -420,10 +347,7 @@ function savePhrasesToFile() {
   }
 }
 
-app.post('/admin/phrases', async (req, res) => {
-  if (!checkPassword(req.body.password)) {
-    return res.status(401).json({ error: 'Wrong password' });
-  }
+app.post('/admin/phrases', requireAdmin, async (req, res) => {
   const { action } = req.body;
   const fail = msg => res.status(400).json({ error: msg });
   try {
@@ -473,10 +397,7 @@ function cleanCampus(raw) {
   return name.length ? name : null;
 }
 
-app.post('/admin/campuses', async (req, res) => {
-  if (!checkPassword(req.body.password)) {
-    return res.status(401).json({ error: 'Wrong password' });
-  }
+app.post('/admin/campuses', requireAdmin, async (req, res) => {
   const { action } = req.body;
   const fail = msg => res.status(400).json({ error: msg });
   try {
@@ -516,6 +437,9 @@ app.post('/admin/campuses', async (req, res) => {
       // Past wins and already-joined players keep the old name; it just
       // disappears from the join dropdown.
     }
+    if (action === 'add' || action === 'edit' || action === 'remove') {
+      io.emit('campuses_update', allCampuses); // join screens refresh their dropdown live
+    }
     res.json({ ok: true, campuses: allCampuses });
   } catch (err) {
     console.error('Campuses failed:', err.message);
@@ -526,10 +450,7 @@ app.post('/admin/campuses', async (req, res) => {
 // Hard reset: permanently erases ALL game history — every win (archived
 // weekends included), the chat log, and tile counts. Phrases and campuses
 // survive. For clearing out test data; no summary email is sent.
-app.post('/admin/hard-reset', async (req, res) => {
-  if (!checkPassword(req.body.password)) {
-    return res.status(401).json({ error: 'Wrong password' });
-  }
+app.post('/admin/hard-reset', requireAdmin, async (req, res) => {
   try {
     if (pool) {
       await pool.query('DELETE FROM wins');
@@ -563,11 +484,8 @@ app.post('/admin/hard-reset', async (req, res) => {
 
 // Suspend pauses all marking and pushes the stats overlay to every player.
 // { active: true } resumes play, { active: false } suspends it.
-app.post('/admin/suspend', async (req, res) => {
-  const { password, active } = req.body;
-  if (!checkPassword(password)) {
-    return res.status(401).json({ error: 'Wrong password' });
-  }
+app.post('/admin/suspend', requireAdmin, async (req, res) => {
+  const { active } = req.body;
   suspended = (active === false);
   if (suspended) {
     const scoreboard = await getScoreboard().catch(() => EMPTY_SCOREBOARD);
@@ -578,15 +496,8 @@ app.post('/admin/suspend', async (req, res) => {
   res.json({ ok: true, suspended });
 });
 
-app.post('/admin/reset', async (req, res) => {
-  if (!checkPassword(req.body.password)) {
-    return res.status(401).json({ error: 'Wrong password' });
-  }
+app.post('/admin/reset', requireAdmin, async (req, res) => {
   try {
-    // Capture stats BEFORE wiping so the email has something to report
-    const scoreboard = await getScoreboard();
-    const popularTiles = getPopularTiles();
-
     // Archive rather than delete — wins stay queryable for the history view
     if (pool) {
       await pool.query('UPDATE wins SET archived = TRUE WHERE archived = FALSE');
@@ -595,8 +506,6 @@ app.post('/admin/reset', async (req, res) => {
       memScores = {};
     }
     phraseCounts = {};
-
-    sendSummaryEmail(scoreboard, popularTiles).catch(err => console.error('Email failed:', err.message));
 
     // A reset means the event is over — make sure nobody is stuck on the stats screen
     if (suspended) {
@@ -668,10 +577,7 @@ async function getHistory() {
   return { weekends, allTime };
 }
 
-app.post('/admin/history', async (req, res) => {
-  if (!checkPassword(req.body.password)) {
-    return res.status(401).json({ error: 'Wrong password' });
-  }
+app.post('/admin/history', requireAdmin, async (req, res) => {
   try {
     res.json({ ok: true, ...await getHistory() });
   } catch (err) {
@@ -680,7 +586,7 @@ app.post('/admin/history', async (req, res) => {
   }
 });
 
-// ── 6. Game logic ──
+// ── 5. Game logic ──
 
 const WIN_LINES = [
   [0,1,2,3,4], [5,6,7,8,9], [10,11,12,13,14], [15,16,17,18,19], [20,21,22,23,24],
@@ -751,7 +657,7 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000);
 
-// ── 7. Socket handlers ──
+// ── 6. Socket handlers ──
 
 io.on('connection', socket => {
   socket.on('join', async ({ name: rawName, campus, deviceId, deviceType } = {}) => {

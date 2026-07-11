@@ -70,25 +70,68 @@ const scoreList   = $('score-list');
 const leadersEl   = $('leaders');
 const joinMsg     = $('join-msg');
 
-// Fill the join dropdown (placeholder option stays at index 0)
-function fillCampusSelect() {
-  const sel = $('campus-select');
-  const current = sel.value;
-  sel.length = 1;
-  campuses.forEach(c => sel.add(new Option(c, c)));
-  if (current && campuses.includes(current)) sel.value = current;
+// ── Custom campus dropdown (native <select> popups can't be themed) ──
+
+let myCampusChoice = '';
+const campusDD   = $('campus-dd');
+const campusBtn  = $('campus-btn');
+const campusMenu = $('campus-menu');
+
+function renderCampusMenu() {
+  // If the chosen campus was removed by an admin, clear the choice
+  if (myCampusChoice && !campuses.includes(myCampusChoice)) {
+    myCampusChoice = '';
+    $('campus-label').textContent = 'Select your campus';
+    campusBtn.classList.remove('chosen');
+  }
+  campusMenu.innerHTML = campuses.map(c => `
+    <button type="button" class="dropdown-item${c === myCampusChoice ? ' selected' : ''}" data-campus="${esc(c)}">
+      <span>${esc(c)}</span>${c === myCampusChoice ? '<span>✓</span>' : ''}
+    </button>`).join('');
 }
 
-fillCampusSelect();
+function closeCampusMenu() {
+  campusDD.classList.remove('open');
+  campusMenu.classList.add('hidden');
+}
+
+campusBtn.addEventListener('click', e => {
+  e.stopPropagation();
+  campusDD.classList.toggle('open');
+  campusMenu.classList.toggle('hidden');
+});
+
+campusMenu.addEventListener('click', e => {
+  const item = e.target.closest('.dropdown-item');
+  if (!item) return;
+  myCampusChoice = item.dataset.campus;
+  $('campus-label').textContent = myCampusChoice;
+  campusBtn.classList.add('chosen');
+  closeCampusMenu();
+  renderCampusMenu();
+});
+
+document.addEventListener('click', e => { if (!campusDD.contains(e.target)) closeCampusMenu(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCampusMenu(); });
+
+// The list stays live: fetched at load, then pushed whenever an admin edits it
+renderCampusMenu();
 fetch('/campuses')
   .then(r => r.json())
   .then(({ campuses: list }) => {
     if (Array.isArray(list) && list.length) {
       campuses = list;
-      fillCampusSelect();
+      renderCampusMenu();
     }
   })
   .catch(() => {}); // fallback list already in place
+
+socket.on('campuses_update', list => {
+  if (Array.isArray(list) && list.length) {
+    campuses = list;
+    renderCampusMenu();
+  }
+});
 
 // ── 2. Join / leave flow ──
 
@@ -98,10 +141,10 @@ $('logo').addEventListener('click', goToJoin);
 
 function doJoin() {
   const name = $('name-input').value.trim();
-  const campus = $('campus-select').value;
+  const campus = myCampusChoice;
   if (!name || !campus) {
     if (!name) $('name-input').focus();
-    else $('campus-select').focus();
+    else campusBtn.focus();
     return;
   }
   myName = name;
