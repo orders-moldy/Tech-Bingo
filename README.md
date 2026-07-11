@@ -29,7 +29,11 @@ Enter the admin password to unlock two controls:
 6. **🏫 Campuses** — manage the campus list on the join screen; renames carry wins and players along.
 7. **🧹 Erase All History** (Overview tab, double-click to confirm) — permanently wipes every win, weekend, chat message, and the recent-player roster for clearing out test data. Phrases and campuses survive.
 
+8. **📋 Activity** (owner-only) — a log of every admin action (resets, suspend/resume, phrase and campus edits) with role and timestamp, so changes made by others are visible.
+
 Admin endpoints are brute-force protected: 8 wrong passwords from one IP locks that IP out for 15 minutes.
+
+**Two access levels:** `ADMIN_PASSWORD` runs the game day-to-day. `OWNER_PASSWORD` (optional) additionally unlocks **Erase All History** and the **Activity** log — share the admin password with the team, keep the owner password to yourself. If `OWNER_PASSWORD` isn't set, the admin password has owner powers.
 
 ## Editing phrases
 
@@ -42,7 +46,8 @@ Use the **Phrases tab in the admin dashboard** (`/admin.html`) — add, edit, or
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | Neon PostgreSQL connection string (scores persist across server sleeps) |
-| `ADMIN_PASSWORD` | Password for `/admin.html` |
+| `ADMIN_PASSWORD` | Day-to-day admin password for `/admin.html` |
+| `OWNER_PASSWORD` | Optional owner password — unlocks Erase All History + the Activity log |
 
 Without `DATABASE_URL`, scores fall back to memory and reset when the server sleeps.
 

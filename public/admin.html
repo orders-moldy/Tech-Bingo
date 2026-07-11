@@ -80,6 +80,7 @@
       <button class="tab" data-tab="chat" onclick="showTab('chat')">Chat</button>
       <button class="tab" data-tab="phrases" onclick="showTab('phrases')">Phrases</button>
       <button class="tab" data-tab="campuses" onclick="showTab('campuses')">Campuses</button>
+      <button class="tab hidden owner-only" data-tab="activity" onclick="showTab('activity')">Activity</button>
     </nav>
 
     <section id="tab-overview">
@@ -109,7 +110,7 @@
             <button id="reset-btn" onclick="doReset()">🗑️ Reset Scores</button>
             <p class="action-hint">Archives the weekend scoreboard into Win History and clears the chat.</p>
           </div>
-          <div class="action action-wide">
+          <div class="action action-wide hidden owner-only">
             <button id="hardreset-btn" onclick="doHardReset(this)">🧹 Erase All History</button>
             <p class="action-hint">Permanently deletes every win, past weekend, and chat message — for clearing out test data. Phrases and campuses are kept. Click twice to confirm.</p>
           </div>
@@ -149,6 +150,14 @@
         </div>
         <input type="text" id="phr-filter" placeholder="🔍 Filter phrases…" oninput="renderPhrases()">
         <div id="phr-list"><p class="empty">Loading…</p></div>
+      </div>
+    </section>
+
+    <section id="tab-activity" class="hidden">
+      <div class="panel">
+        <div class="panel-title" id="activity-title">📋 Admin Activity</div>
+        <p class="phr-note">Every admin action, newest first — so changes made by others are visible. Owner-only.</p>
+        <div id="activity-log"><p class="empty">Loading…</p></div>
       </div>
     </section>
 

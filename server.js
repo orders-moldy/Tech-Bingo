@@ -127,6 +127,16 @@ async function initDB() {
   } else {
     allPhrases = rows.map(r => r.text);
   }
+  // Admin activity log (who did what, by role, when)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_log (
+      id SERIAL PRIMARY KEY,
+      role TEXT NOT NULL,
+      action TEXT NOT NULL,
+      detail TEXT NOT NULL,
+      ts BIGINT NOT NULL
+    )
+  `);
   // Editable campus list — same seed-then-DB pattern as phrases
   await pool.query(`
     CREATE TABLE IF NOT EXISTS campuses (
@@ -232,8 +242,16 @@ app.get('/campuses', (req, res) => {
   res.json({ campuses: allCampuses });
 });
 
-function checkPassword(password) {
-  return Boolean(process.env.ADMIN_PASSWORD) && password === process.env.ADMIN_PASSWORD;
+// Two access levels: ADMIN_PASSWORD runs the game day-to-day;
+// OWNER_PASSWORD additionally unlocks Erase All History and the activity
+// log. If OWNER_PASSWORD isn't set, the admin password gets owner powers
+// (single-admin setup keeps working unchanged).
+function roleFor(password) {
+  if (!process.env.ADMIN_PASSWORD) return null;
+  const ownerPw = process.env.OWNER_PASSWORD;
+  if (ownerPw && password === ownerPw) return 'owner';
+  if (password === process.env.ADMIN_PASSWORD) return ownerPw ? 'admin' : 'owner';
+  return null;
 }
 
 // Brute-force protection: 8 wrong passwords from one IP locks that IP out
@@ -249,18 +267,63 @@ function requireAdmin(req, res, next) {
   if (authFails[ip] && authFails[ip].count >= AUTH_MAX_FAILS) {
     return res.status(429).json({ error: 'Too many attempts — locked out for 15 minutes' });
   }
-  if (!checkPassword(req.body.password)) {
+  const role = roleFor(req.body.password);
+  if (!role) {
     const r = authFails[ip] ??= { count: 0, firstAt: Date.now() };
     r.count++;
     return res.status(401).json({ error: 'Wrong password' });
   }
   delete authFails[ip];
+  req.role = role;
   next();
 }
 
+function requireOwner(req, res, next) {
+  if (req.role !== 'owner') {
+    return res.status(403).json({ error: 'Owner access required' });
+  }
+  next();
+}
+
+// ── Activity log — every admin action, so changes by others are visible ──
+
+const LOG_FETCH_LIMIT = 200;
+const LOG_MEM_MAX = 500;
+let memAdminLog = []; // fallback when no DB
+
+function logAction(role, action, detail) {
+  const entry = { role, action, detail, ts: Date.now() };
+  if (pool) {
+    pool.query('INSERT INTO admin_log (role, action, detail, ts) VALUES ($1, $2, $3, $4)',
+      [role, action, detail, entry.ts])
+      .catch(err => console.error('activity log failed:', err.message));
+  } else {
+    memAdminLog.push(entry);
+    if (memAdminLog.length > LOG_MEM_MAX) memAdminLog.shift();
+  }
+}
+
+app.post('/admin/activity', requireAdmin, requireOwner, async (req, res) => {
+  try {
+    let entries;
+    if (pool) {
+      const result = await pool.query(
+        `SELECT role, action, detail, ts FROM admin_log ORDER BY ts DESC LIMIT ${LOG_FETCH_LIMIT}`
+      );
+      entries = result.rows.map(e => ({ ...e, ts: Number(e.ts) }));
+    } else {
+      entries = [...memAdminLog].reverse().slice(0, LOG_FETCH_LIMIT);
+    }
+    res.json({ ok: true, entries });
+  } catch (err) {
+    console.error('Activity failed:', err.message);
+    res.status(500).json({ error: 'Could not load activity' });
+  }
+});
+
 // Verifies the password up front so the admin page only unlocks for real admins.
 app.post('/admin/login', requireAdmin, (req, res) => {
-  res.json({ ok: true, suspended });
+  res.json({ ok: true, suspended, role: req.role });
 });
 
 // Snapshot for the admin dashboard: live counts + current weekend standings.
@@ -358,6 +421,7 @@ app.post('/admin/phrases', requireAdmin, async (req, res) => {
       allPhrases.push(text);
       if (pool) await pool.query('INSERT INTO phrases (text) VALUES ($1) ON CONFLICT DO NOTHING', [text]);
       else savePhrasesToFile();
+      logAction(req.role, 'phrase-add', `Added phrase "${text}"`);
 
     } else if (action === 'edit') {
       const { oldText } = req.body;
@@ -369,6 +433,7 @@ app.post('/admin/phrases', requireAdmin, async (req, res) => {
       allPhrases[idx] = text;
       if (pool) await pool.query('UPDATE phrases SET text = $1 WHERE text = $2', [text, oldText]);
       else savePhrasesToFile();
+      logAction(req.role, 'phrase-edit', `Changed phrase "${oldText}" to "${text}"`);
 
     } else if (action === 'remove') {
       const idx = allPhrases.indexOf(req.body.text);
@@ -377,6 +442,7 @@ app.post('/admin/phrases', requireAdmin, async (req, res) => {
       allPhrases.splice(idx, 1);
       if (pool) await pool.query('DELETE FROM phrases WHERE text = $1', [req.body.text]);
       else savePhrasesToFile();
+      logAction(req.role, 'phrase-remove', `Removed phrase "${req.body.text}"`);
     }
     // 'list' (and every successful action) returns the current list
     res.json({ ok: true, phrases: allPhrases, min: CARD_PHRASES });
@@ -407,6 +473,7 @@ app.post('/admin/campuses', requireAdmin, async (req, res) => {
       if (allCampuses.some(c => c.toLowerCase() === name.toLowerCase())) return fail('That campus already exists');
       allCampuses.push(name);
       if (pool) await pool.query('INSERT INTO campuses (name) VALUES ($1) ON CONFLICT DO NOTHING', [name]);
+      logAction(req.role, 'campus-add', `Added campus "${name}"`);
 
     } else if (action === 'edit') {
       const { oldName } = req.body;
@@ -427,6 +494,7 @@ app.post('/admin/campuses', requireAdmin, async (req, res) => {
         if (p.campus === oldName) p.campus = name;
       });
       broadcastPlayers();
+      logAction(req.role, 'campus-edit', `Renamed campus "${oldName}" to "${name}"`);
 
     } else if (action === 'remove') {
       const idx = allCampuses.indexOf(req.body.name);
@@ -434,6 +502,7 @@ app.post('/admin/campuses', requireAdmin, async (req, res) => {
       if (allCampuses.length <= 1) return fail('At least one campus is required');
       allCampuses.splice(idx, 1);
       if (pool) await pool.query('DELETE FROM campuses WHERE name = $1', [req.body.name]);
+      logAction(req.role, 'campus-remove', `Removed campus "${req.body.name}"`);
       // Past wins and already-joined players keep the old name; it just
       // disappears from the join dropdown.
     }
@@ -450,7 +519,7 @@ app.post('/admin/campuses', requireAdmin, async (req, res) => {
 // Hard reset: permanently erases ALL game history — every win (archived
 // weekends included), the chat log, and tile counts. Phrases and campuses
 // survive. For clearing out test data; no summary email is sent.
-app.post('/admin/hard-reset', requireAdmin, async (req, res) => {
+app.post('/admin/hard-reset', requireAdmin, requireOwner, async (req, res) => {
   try {
     if (pool) {
       await pool.query('DELETE FROM wins');
@@ -475,6 +544,7 @@ app.post('/admin/hard-reset', requireAdmin, async (req, res) => {
     }
     io.emit('scoreboard_update', { ...EMPTY_SCOREBOARD, popularTiles: [] });
     io.emit('chat_history', []);
+    logAction(req.role, 'hard-reset', 'Erased all game history');
     res.json({ ok: true });
   } catch (err) {
     console.error('Hard reset failed:', err.message);
@@ -493,6 +563,8 @@ app.post('/admin/suspend', requireAdmin, async (req, res) => {
   } else {
     io.emit('resume');
   }
+  logAction(req.role, suspended ? 'suspend' : 'resume',
+    suspended ? 'Paused play — stats screen shown to all players' : 'Resumed play');
   res.json({ ok: true, suspended });
 });
 
@@ -520,6 +592,7 @@ app.post('/admin/reset', requireAdmin, async (req, res) => {
     io.emit('chat_history', []);
 
     io.emit('scoreboard_update', { ...EMPTY_SCOREBOARD, popularTiles: [] });
+    logAction(req.role, 'reset', 'Archived the weekend and cleared the scoreboard');
     res.json({ ok: true });
   } catch (err) {
     console.error('Reset failed:', err.message);

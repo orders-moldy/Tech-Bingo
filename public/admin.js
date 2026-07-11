@@ -8,6 +8,8 @@ let phrasesCache = null;   // current phrase list, null until first load
 let editingPhrase = null;  // phrase currently in inline-edit mode
 let campusesCache = null;  // current campus list, null until first load
 let editingCampus = null;  // campus currently in inline-edit mode
+let role = 'admin';        // 'owner' additionally sees Erase All History + Activity
+let activityLoaded = false;
 
 const $ = id => document.getElementById(id);
 
@@ -69,6 +71,10 @@ async function doUnlock() {
     }
     $('login-view').classList.add('hidden');
     $('dash').classList.remove('hidden');
+    role = data.role || 'owner';
+    if (role === 'owner') {
+      document.querySelectorAll('.owner-only').forEach(el => el.classList.remove('hidden'));
+    }
     await refreshOverview();
   } catch {
     $('login-msg').textContent = '❌ Could not connect to server.';
@@ -84,10 +90,12 @@ function showTab(name) {
   $('tab-chat').classList.toggle('hidden', name !== 'chat');
   $('tab-phrases').classList.toggle('hidden', name !== 'phrases');
   $('tab-campuses').classList.toggle('hidden', name !== 'campuses');
+  $('tab-activity').classList.toggle('hidden', name !== 'activity');
   if (name === 'history' && !historyLoaded) loadHistory();
   if (name === 'chat' && !chatLoaded) loadChat();
   if (name === 'phrases' && phrasesCache === null) loadPhrases();
   if (name === 'campuses' && campusesCache === null) loadCampuses();
+  if (name === 'activity' && !activityLoaded) loadActivity();
 }
 
 // ── Overview ──
@@ -555,6 +563,48 @@ async function removeCampus(btn) {
   }
 }
 
+// ── Activity log (owner-only) ──
+
+const ACTION_ICONS = {
+  suspend: '📊', resume: '▶️', reset: '🗑️', 'hard-reset': '🧹',
+  'phrase-add': '🧩', 'phrase-edit': '🧩', 'phrase-remove': '🧩',
+  'campus-add': '🏫', 'campus-edit': '🏫', 'campus-remove': '🏫',
+};
+
+async function loadActivity() {
+  try {
+    const data = await api('/admin/activity');
+    if (!data.ok) { setMsg('❌ ' + (data.error || 'Failed'), 'error'); return; }
+    activityLoaded = true;
+    renderActivity(data.entries);
+  } catch {
+    setMsg('❌ Could not connect to server.', 'error');
+  }
+}
+
+function renderActivity(entries) {
+  $('activity-title').textContent = `📋 Admin Activity (${entries.length}${entries.length === 200 ? '+' : ''})`;
+  const el = $('activity-log');
+  if (!entries.length) {
+    el.innerHTML = '<p class="empty">No admin actions recorded yet.</p>';
+    return;
+  }
+  el.innerHTML = entries.map(e => {
+    const d = new Date(e.ts);
+    const when = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+               + ' · ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `
+      <div class="act-row">
+        <span class="act-icon">${ACTION_ICONS[e.action] || '⚙️'}</span>
+        <div class="act-info">
+          <div class="act-detail">${esc(e.detail)}</div>
+          <div class="act-meta">${when}</div>
+        </div>
+        <span class="act-role ${e.role === 'owner' ? 'owner' : ''}">${esc(e.role)}</span>
+      </div>`;
+  }).join('');
+}
+
 // ── Actions ──
 
 async function refreshAll() {
@@ -564,6 +614,7 @@ async function refreshAll() {
   if (chatLoaded) await loadChat();
   if (phrasesCache !== null) await loadPhrases();
   if (campusesCache !== null) await loadCampuses();
+  if (activityLoaded) await loadActivity();
   setMsg('');
 }
 
