@@ -637,7 +637,7 @@
     <p>Enter the admin password to open the dashboard.</p>
     <input type="password" id="pw" placeholder="Admin password" autocomplete="current-password">
     <button id="unlock-btn" onclick="doUnlock()">Unlock</button>
-    <div id="login-msg" style="font-size:0.9rem;color:#e74c3c;min-height:1.3em;"></div>
+    <div id="login-msg"></div>
   </div>
 
   <!-- Dashboard -->
@@ -661,7 +661,7 @@
         <div class="stat-hint">tap to view ›</div>
       </div>
       <div class="stat-card"><div class="stat-value" id="stat-wins">–</div><div class="stat-label">🏆 Weekend wins</div></div>
-      <div class="stat-card"><div class="stat-value" id="stat-games">–</div><div class="stat-label">🎲 Games today</div></div>
+      <div class="stat-card"><div class="stat-value" id="stat-games">–</div><div class="stat-label">🎲 Games this session</div></div>
       <div class="stat-card"><div class="stat-value" id="stat-phrases">–</div><div class="stat-label">🧩 Phrases</div></div>
     </div>
 
@@ -1335,6 +1335,7 @@
       if (historyLoaded) await loadHistory();
       if (chatLoaded) await loadChat();
       if (phrasesCache !== null) await loadPhrases();
+      if (campusesCache !== null) await loadCampuses();
       setMsg('');
     }
 

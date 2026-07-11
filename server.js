@@ -541,6 +541,13 @@ app.post('/admin/hard-reset', async (req, res) => {
     chatHistory = [];
     memChatLog = [];
 
+    // Forget disconnected devices so tester names leave the roster too;
+    // anyone still connected keeps playing untouched
+    const connected = new Set(Object.values(players));
+    for (const [deviceId, state] of Object.entries(devicePlayers)) {
+      if (!connected.has(state)) delete devicePlayers[deviceId];
+    }
+
     if (suspended) {
       suspended = false;
       io.emit('resume');
