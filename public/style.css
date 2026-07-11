@@ -765,21 +765,27 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 
 .chat-input-row {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
 .chat-input-row input {
   flex: 1;
+  min-width: 0;             /* let the input shrink instead of overflowing the column */
   padding: 10px 14px;
   font-size: 0.9rem;
 }
 
 .chat-input-row input:disabled { opacity: 0.5; }
 
+/* Compact round send button — leaves the input room in the narrow side column */
 #chat-send {
-  width: auto;
-  padding: 10px 18px;
-  font-size: 0.85rem;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 0.95rem;
+  line-height: 1;
   flex-shrink: 0;
 }
 

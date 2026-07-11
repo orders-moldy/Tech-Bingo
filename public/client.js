@@ -482,7 +482,7 @@ function sendChat() {
 
 function setChatEnabled(enabled) {
   chatInput.disabled = !enabled;
-  chatInput.placeholder = enabled ? 'Say something…' : 'Chat paused during stats';
+  chatInput.placeholder = enabled ? 'Message…' : 'Paused for stats';
 }
 
 function clearUnread() {
