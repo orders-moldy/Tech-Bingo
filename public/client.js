@@ -501,7 +501,7 @@ function scrollChatToBottom() {
 function chatRow(msg) {
   const row = document.createElement('div');
   row.className = 'chat-msg';
-  const mine = msg.name === myName;
+  const mine = msg.name === myName && msg.campus === myCampus;
   const time = msg.ts ? new Date(msg.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
   row.innerHTML = `<span class="chat-name${mine ? ' me' : ''}">${esc(msg.name)}</span>`
     + (time ? `<span class="chat-time">${time}</span>` : '')
@@ -522,7 +522,7 @@ function appendChatMessage(msg) {
   while (chatMessages.children.length > CHAT_DOM_MAX) chatMessages.firstChild.remove();
 
   // Don't yank the view down if the user scrolled up to read older messages
-  if (wasNearBottom || msg.name === myName) {
+  if (wasNearBottom || (msg.name === myName && msg.campus === myCampus)) {
     scrollChatToBottom();
   } else if (chatOpen) {
     chatPill.classList.remove('hidden');

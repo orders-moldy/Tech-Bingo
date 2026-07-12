@@ -51,6 +51,15 @@ Use the **Phrases tab in the admin dashboard** (`/admin.html`) — add, edit, or
 
 Without `DATABASE_URL`, scores fall back to memory and reset when the server sleeps.
 
+## Install as a phone app
+
+The game is a Progressive Web App — players can pin it to their home screen and it opens full-screen like a native app (no app store involved):
+
+- **iPhone (Safari):** open the game link → Share button → **Add to Home Screen**
+- **Android (Chrome):** open the game link → ⋮ menu → **Add to Home screen** (or tap the install banner)
+
+There's deliberately no offline mode — the game is live-multiplayer, so it needs a connection anyway.
+
 ## Run locally
 
 ```bash

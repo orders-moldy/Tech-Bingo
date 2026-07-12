@@ -1,0 +1,29 @@
+{
+  "name": "TCC Tech Bingo",
+  "short_name": "Tech Bingo",
+  "description": "Buzzword bingo for The Compass Church services \u2014 tap tiles as you hear them.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#7FA2AD",
+  "theme_color": "#7FA2AD",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

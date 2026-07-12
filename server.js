@@ -722,11 +722,15 @@ function startNewGame() {
   broadcastPlayers();
 }
 
-// Forget devices that haven't been seen in a while so the map can't grow forever
+// Hourly housekeeping: forget stale devices and expired lockout records
+// so neither map can grow forever
 setInterval(() => {
   const cutoff = Date.now() - DEVICE_EXPIRY_MS;
   for (const [deviceId, state] of Object.entries(devicePlayers)) {
     if ((state.lastSeen || 0) < cutoff) delete devicePlayers[deviceId];
+  }
+  for (const [ip, rec] of Object.entries(authFails)) {
+    if (Date.now() - rec.firstAt >= AUTH_LOCKOUT_MS) delete authFails[ip];
   }
 }, 60 * 60 * 1000);
 
