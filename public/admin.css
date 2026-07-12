@@ -5,6 +5,7 @@
 
 /* Blue mode (default): #9BB6BF fills the page; cream #ECE6DF is the accent */
 :root {
+  --css-loaded: 1; /* sentinel — admin.html reloads once if this is missing */
   --primary: #5d8592;
   --primary-hi: #6f96a3;
   --primary-dark: #46707d;

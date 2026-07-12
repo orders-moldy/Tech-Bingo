@@ -17,6 +17,25 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  <style>
+    /* Critical fallback: if style.css fails on a flaky connection or while the
+       server wakes, keep inactive screens hidden and the page presentable */
+    .hidden { display: none !important; }
+    body { margin: 0; font-family: 'Montserrat', system-ui, sans-serif; background: #7FA2AD; color: #3a4247; }
+  </style>
+  <script>
+    // style.css sets --css-loaded on :root. If it's missing after load
+    // (stylesheet request failed), reload once to fetch it again.
+    window.addEventListener('load', () => {
+      const ok = getComputedStyle(document.documentElement).getPropertyValue('--css-loaded').trim() === '1';
+      if (!ok && !sessionStorage.getItem('bingo_css_retry')) {
+        sessionStorage.setItem('bingo_css_retry', '1');
+        location.reload();
+      } else if (ok) {
+        sessionStorage.removeItem('bingo_css_retry');
+      }
+    });
+  </script>
 </head>
 <body>
 
