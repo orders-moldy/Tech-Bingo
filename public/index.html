@@ -16,13 +16,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
   <style>
     /* Critical fallback: if style.css fails on a flaky connection or while the
-       server wakes, keep inactive screens hidden and the page presentable */
+       server wakes, keep inactive screens hidden and the page presentable.
+       Must come BEFORE the stylesheet so the real styles win when loaded. */
     .hidden { display: none !important; }
     body { margin: 0; font-family: 'Montserrat', system-ui, sans-serif; background: #7FA2AD; color: #3a4247; }
   </style>
+  <link rel="stylesheet" href="style.css">
   <script>
     // style.css sets --css-loaded on :root. If it's missing after load
     // (stylesheet request failed), reload once to fetch it again.
